@@ -52,6 +52,18 @@ function encode(num::Signed)
     end
 end
 
+function encode(byte_str::ASCIIString)
+    bytes_array = encode_unsigned_with_type(
+        UInt8(2), Unsigned(length(byte_str))
+    )
+
+    for c in byte_str
+        push!(bytes_array, UInt8(c))
+    end
+
+    return bytes_array
+end
+
 function encode(data)
     cbor_bytes = UInt8[]
     return cbor_bytes
