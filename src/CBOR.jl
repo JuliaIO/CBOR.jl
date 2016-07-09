@@ -76,6 +76,19 @@ function encode(utf8_str::UTF8String)
     return bytes_array
 end
 
+function encode(map::Associative)
+    bytes_array = encode_unsigned_with_type(
+        UInt8(5), Unsigned(length(map))
+    )
+
+    for (key, value) in map
+        append!(bytes_array, encode(key))
+        append!(bytes_array, encode(value))
+    end
+
+    return bytes_array
+end
+
 function encode(data)
     cbor_bytes = UInt8[]
     return cbor_bytes
