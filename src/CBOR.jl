@@ -64,6 +64,18 @@ function encode(byte_str::ASCIIString)
     return bytes_array
 end
 
+function encode(utf8_str::UTF8String)
+    bytes_array = encode_unsigned_with_type(
+        UInt8(3), Unsigned(sizeof(utf8_str))
+    )
+
+    for c in utf8_str.data
+        push!(bytes_array, UInt8(c))
+    end
+
+    return bytes_array
+end
+
 function encode(data)
     cbor_bytes = UInt8[]
     return cbor_bytes
