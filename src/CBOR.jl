@@ -1,10 +1,7 @@
 module CBOR
 
 function encode(bool::Bool)
-    if bool
-        return UInt8[0xf5,]
-    end
-    return UInt8[0xf4,]
+    return UInt8[0xf4 + bool,]
 end
 
 function encode_unsigned_with_type(typ::UInt8, num::Unsigned)
