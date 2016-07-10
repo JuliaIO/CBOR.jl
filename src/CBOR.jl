@@ -14,7 +14,6 @@ function encode(bool::Bool)
 end
 
 function encode_unsigned_with_type(typ_bits::UInt8, num::Unsigned)
-
     if num < 0x18 # 0 to 23
         return UInt8[typ_bits | num]
     elseif num < 0x100 # 8 bit unsigned integer
@@ -61,51 +60,35 @@ function encode(num::Signed)
 end
 
 function encode(byte_str::ASCIIString)
-    bytes_array = encode_unsigned_with_type(
-        TYPE_2, Unsigned(length(byte_str))
-    )
-
+    bytes_array = encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_str)))
     for c in byte_str
         push!(bytes_array, UInt8(c))
     end
-
     return bytes_array
 end
 
 function encode(utf8_str::UTF8String)
-    bytes_array = encode_unsigned_with_type(
-        TYPE_3, Unsigned(sizeof(utf8_str))
-    )
-
+    bytes_array = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(utf8_str)))
     for c in utf8_str.data
         push!(bytes_array, UInt8(c))
     end
-
     return bytes_array
 end
 
 function encode(list::Union{AbstractVector,Tuple})
-    bytes_array = encode_unsigned_with_type(
-        TYPE_4, Unsigned(length(list))
-    )
-
+    bytes_array = encode_unsigned_with_type(TYPE_4, Unsigned(length(list)))
     for e in list
         append!(bytes_array, encode(e))
     end
-
     return bytes_array
 end
 
 function encode(map::Associative)
-    bytes_array = encode_unsigned_with_type(
-        TYPE_5, Unsigned(length(map))
-    )
-
+    bytes_array = encode_unsigned_with_type(TYPE_5, Unsigned(length(map)))
     for (key, value) in map
         append!(bytes_array, encode(key))
         append!(bytes_array, encode(value))
     end
-
     return bytes_array
 end
 
@@ -115,7 +98,6 @@ function encode(data)
 end
 
 function decode(code)
-
 end
 
 end
