@@ -10,7 +10,7 @@ function encode_unsigned_with_type(typ::UInt8, num::Unsigned)
     if num < 0x18 # 0 to 23
         return UInt8[three_type_bits | num]
     elseif num < 0x100 # 8 bit unsigned integer
-        return UInt8[num, three_type_bits | 0x18]
+        return UInt8[three_type_bits | 0x18, num]
     end
 
     hex_str = hex(num)
