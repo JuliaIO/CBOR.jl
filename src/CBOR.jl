@@ -93,12 +93,12 @@ function encode(float::AbstractFloat)
     cbor_bytes = hex2bytes(num2hex(float))
 
     cbor_bytes_len = length(cbor_bytes)
-    if cbor_bytes_len == 2 # IEEE 754 Half-Precision Float
-        unshift!(cbor_bytes, TYPE_7 | UInt8(25))
+    if cbor_bytes_len == 8 # IEEE 754 Double-Precision Float
+        unshift!(cbor_bytes, TYPE_7 | UInt8(27))
     elseif cbor_bytes_len == 4 # IEEE 754 Single-Precision Float
         unshift!(cbor_bytes, TYPE_7 | UInt8(26))
-    else cbor_bytes_len == 8 # IEEE 754 Double-Precision Float
-        unshift!(cbor_bytes, TYPE_7 | UInt8(27))
+    else cbor_bytes_len == 2 # IEEE 754 Half-Precision Float
+        unshift!(cbor_bytes, TYPE_7 | UInt8(25))
     end
 
     return cbor_bytes
