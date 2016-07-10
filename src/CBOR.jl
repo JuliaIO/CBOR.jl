@@ -20,28 +20,25 @@ function encode_unsigned_with_type(typ_bits::UInt8, num::Unsigned)
         return UInt8[typ_bits | 0x18, num]
     end
 
-    hex_str = hex(num)
-    if isodd(length(hex_str))
-        hex_str = "0" * hex_str # hex2bytes() doesn't accept odd length strings
-    end
-    bytes_array = hex2bytes(hex_str)
-
-    uint_byte_len = 0
-
+    bytes_array = UInt8[]
     if num < 0x10000 # 16 bit unsigned integer
-        unshift!(bytes_array, typ_bits | 0x19)
-        uint_byte_len = 2
+        push!(bytes_array, typ_bits | 0x19)
+        byte_len = 2
     elseif num < 0x100000000 # 32 bit unsigned integer
-        unshift!(bytes_array, typ_bits | 0x1a)
-        uint_byte_len = 4
+        push!(bytes_array, typ_bits | 0x1a)
+        byte_len = 4
     else # 64 bit unsigned integer
-        unshift!(bytes_array, typ_bits | 0x1b)
-        uint_byte_len = 8
+        push!(bytes_array, typ_bits | 0x1b)
+        byte_len = 8
     end
 
-    # pad out some zeros in the byte array if needed
-    for _ in 1:(uint_byte_len - length(bytes_array) + 1)
-        insert!(bytes_array, 2, zero(UInt8))
+    for _ in 1:byte_len
+        if num > 0
+            insert!(bytes_array, 2, num & 0xFF)
+            num = num >>> 8
+        else
+            insert!(bytes_array, 2, zero(UInt8))
+        end
     end
 
     return bytes_array
