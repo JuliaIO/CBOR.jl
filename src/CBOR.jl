@@ -89,6 +89,21 @@ function encode(map::Associative)
     return cbor_bytes
 end
 
+function encode(float::AbstractFloat)
+    cbor_bytes = hex2bytes(num2hex(float))
+
+    cbor_bytes_len = length(cbor_bytes)
+    if cbor_bytes_len == 2 # IEEE 754 Half-Precision Float
+        unshift!(cbor_bytes, TYPE_7 | UInt8(25))
+    elseif cbor_bytes_len == 4 # IEEE 754 Single-Precision Float
+        unshift!(cbor_bytes, TYPE_7 | UInt8(26))
+    else cbor_bytes_len == 8 # IEEE 754 Double-Precision Float
+        unshift!(cbor_bytes, TYPE_7 | UInt8(27))
+    end
+
+    return cbor_bytes
+end
+
 function encode(data)
     cbor_bytes = UInt8[]
     return cbor_bytes
