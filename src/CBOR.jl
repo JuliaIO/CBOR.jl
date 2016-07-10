@@ -13,35 +13,35 @@ function encode(bool::Bool)
     return UInt8[0xf4 + bool]
 end
 
-function encode_unsigned_with_type(typ_bits::UInt8, num::Unsigned)
+function encode_unsigned_with_type(type_bits::UInt8, num::Unsigned)
     if num < 0x18 # 0 to 23
-        return UInt8[typ_bits | num]
+        return UInt8[type_bits | num]
     elseif num < 0x100 # 8 bit unsigned integer
-        return UInt8[typ_bits | 0x18, num]
+        return UInt8[type_bits | 0x18, num]
     end
 
-    bytes_array = UInt8[]
+    cbor_bytes = UInt8[]
     if num < 0x10000 # 16 bit unsigned integer
-        push!(bytes_array, typ_bits | 0x19)
+        push!(cbor_bytes, type_bits | 0x19)
         byte_len = 2
     elseif num < 0x100000000 # 32 bit unsigned integer
-        push!(bytes_array, typ_bits | 0x1a)
+        push!(cbor_bytes, type_bits | 0x1a)
         byte_len = 4
     else # 64 bit unsigned integer
-        push!(bytes_array, typ_bits | 0x1b)
+        push!(cbor_bytes, type_bits | 0x1b)
         byte_len = 8
     end
 
     for _ in 1:byte_len
         if num > 0
-            insert!(bytes_array, 2, num & 0xFF)
+            insert!(cbor_bytes, 2, num & 0xFF)
             num = num >>> 8
         else
-            insert!(bytes_array, 2, zero(UInt8))
+            insert!(cbor_bytes, 2, zero(UInt8))
         end
     end
 
-    return bytes_array
+    return cbor_bytes
 end
 
 function encode(num::Unsigned)
@@ -50,43 +50,43 @@ end
 
 function encode(num::Signed)
     if num < 0
-        return encode_unsigned_with_type(TYPE_1, Unsigned(-num - 1))
+        return encode_unsigned_with_type(TYPE_1, Unsigned(-num - 1) )
     else
         return encode_unsigned_with_type(TYPE_0, Unsigned(num))
     end
 end
 
 function encode(byte_str::ASCIIString)
-    bytes_array = encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_str)))
+    cbor_bytes = encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_str)) )
     for c in byte_str
-        push!(bytes_array, UInt8(c))
+        push!(cbor_bytes, UInt8(c))
     end
-    return bytes_array
+    return cbor_bytes
 end
 
 function encode(utf8_str::UTF8String)
-    bytes_array = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(utf8_str)))
+    cbor_bytes = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(utf8_str)) )
     for c in utf8_str.data
-        push!(bytes_array, UInt8(c))
+        push!(cbor_bytes, UInt8(c))
     end
-    return bytes_array
+    return cbor_bytes
 end
 
 function encode(list::Union{AbstractVector,Tuple})
-    bytes_array = encode_unsigned_with_type(TYPE_4, Unsigned(length(list)))
+    cbor_bytes = encode_unsigned_with_type(TYPE_4, Unsigned(length(list)) )
     for e in list
-        append!(bytes_array, encode(e))
+        append!(cbor_bytes, encode(e))
     end
-    return bytes_array
+    return cbor_bytes
 end
 
 function encode(map::Associative)
-    bytes_array = encode_unsigned_with_type(TYPE_5, Unsigned(length(map)))
+    cbor_bytes = encode_unsigned_with_type(TYPE_5, Unsigned(length(map)) )
     for (key, value) in map
-        append!(bytes_array, encode(key))
-        append!(bytes_array, encode(value))
+        append!(cbor_bytes, encode(key))
+        append!(cbor_bytes, encode(value))
     end
-    return bytes_array
+    return cbor_bytes
 end
 
 function encode(data)
