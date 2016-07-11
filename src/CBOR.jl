@@ -109,49 +109,62 @@ function encode(data)
     return cbor_bytes
 end
 
-function decode(cbor_bytes::Array{UInt8, 1})
-    i = 1
-    data = 0
+function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
+    addntl_info = unsigned_bytes[start_idx] & 0b0001_1111
 
-    function decode_unsigned()
-        addntl_info = cbor_bytes[i] & 0b0001_1111
-
-        if addntl_info <= 24 # 8 bit unsigned integer
-            num_byte_len = 1
-            i -= addntl_info != 24 # 0-23
-            data = zero(UInt8)
-        elseif addntl_info == 25 # 16 bit unsigned integer
-            num_byte_len = 2
-            data = zero(UInt16)
-        elseif addntl_info == 26 # 32 bit unsigned integer
-            num_byte_len = 4
-            data = zero(UInt32)
-        elseif addntl_info == 27 # 64 bit unsigned integer
-            num_byte_len = 8
-            data = zero(UInt64)
-        end
-
-        i += 1
-
-        for _ in 1:num_byte_len
-            data <<= 8
-            data |= cbor_bytes[i]
-            i += 1
-        end
+    if addntl_info < 24 # 0-23
+        return addntl_info, sizeof(UInt8)
     end
 
-    while i <= length(cbor_bytes)
+    data, byte_len =
+        if addntl_info == 24
+            zero(UInt8), sizeof(UInt8)
+        elseif addntl_info == 25
+            zero(UInt16), sizeof(UInt16)
+        elseif addntl_info == 26
+            zero(UInt32), sizeof(UInt32)
+        elseif addntl_info == 27
+            zero(UInt64), sizeof(UInt64)
+        end
 
-        typ = cbor_bytes[i] & 0b1110_0000
+    byte_len += 1
+    start_idx -= 1
+    for i in 2:byte_len
+        data <<= 8
+        data |= unsigned_bytes[start_idx + i]
+    end
 
+    return data, byte_len
+end
+
+function decode_next(start_idx, bytes::Array{UInt8, 1})
+    typ = bytes[start_idx] & 0b1110_0000
+
+    data, bytes_consumed =
         if typ == TYPE_0
-            decode_unsigned()
+            decode_unsigned(start_idx, bytes)
         elseif typ == TYPE_1
-            decode_unsigned()
+            data, bytes_consumed = decode_unsigned(start_idx, bytes)
             data = -(Signed(data) + 1)
+            data, bytes_consumed
+        elseif typ == TYPE_4
+            vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
+            data = Vector(vec_len)
+
+            for i in 1:vec_len
+                data[i], sub_bytes_consumed =
+                    decode_next(bytes_consumed + 1, bytes)
+                bytes_consumed += sub_bytes_consumed
+            end
+
+            data, bytes_consumed
         end
 
-    end
+    return data, bytes_consumed
+end
+
+function decode(cbor_bytes::Array{UInt8, 1})
+    data, _ = decode_next(1, cbor_bytes)
     return data
 end
 
