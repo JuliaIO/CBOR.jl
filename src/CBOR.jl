@@ -17,18 +17,18 @@ function encode_unsigned_with_type(type_bits::UInt8, num::Unsigned)
     if num < 0x18 # 0 to 23
         return UInt8[type_bits | num]
     elseif num < 0x100 # 8 bit unsigned integer
-        return UInt8[type_bits | 0x18, num]
+        return UInt8[type_bits | 24, num]
     end
 
     cbor_bytes = UInt8[]
     if num < 0x10000 # 16 bit unsigned integer
-        push!(cbor_bytes, type_bits | 0x19)
+        push!(cbor_bytes, type_bits | 25)
         byte_len = 2
     elseif num < 0x100000000 # 32 bit unsigned integer
-        push!(cbor_bytes, type_bits | 0x1a)
+        push!(cbor_bytes, type_bits | 26)
         byte_len = 4
     else # 64 bit unsigned integer
-        push!(cbor_bytes, type_bits | 0x1b)
+        push!(cbor_bytes, type_bits | 27)
         byte_len = 8
     end
 
