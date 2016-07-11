@@ -109,7 +109,43 @@ function encode(data)
     return cbor_bytes
 end
 
-function decode(code)
+function decode(cbor_bytes::Array{UInt8, 1})
+    i = 1
+    data = 0
+    while i <= length(cbor_bytes)
+
+        cbor_byte = cbor_bytes[i]
+        typ = cbor_byte & 0b1110_0000
+
+        if typ == TYPE_0
+            addntl_info = cbor_byte & 0b0001_1111
+
+            if addntl_info <= 24 # 8 bit unsigned integer
+                num_byte_len = 1
+                i -= addntl_info != 24 # 0-23
+                data = zero(UInt8)
+            elseif addntl_info == 25 # 16 bit unsigned integer
+                num_byte_len = 2
+                data = zero(UInt16)
+            elseif addntl_info == 26 # 32 bit unsigned integer
+                num_byte_len = 4
+                data = zero(UInt32)
+            elseif addntl_info == 27 # 64 bit unsigned integer
+                num_byte_len = 8
+                data = zero(UInt64)
+            end
+
+            i += 1
+
+            for _ in 1:num_byte_len
+                data <<= 8
+                data |= cbor_bytes[i]
+                i += 1
+            end
+        end
+
+    end
+    return data
 end
 
 end
