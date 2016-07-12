@@ -138,7 +138,14 @@ function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1})
-    typ = bytes[start_idx] & 0b1110_0000
+    first_byte = bytes[start_idx]
+    if first_byte == 0xf5
+        return true, 1
+    elseif first_byte == 0xf4
+        return false, 1
+    end 
+
+    typ = first_byte & 0b1110_0000
 
     data, bytes_consumed =
         if typ == TYPE_0
