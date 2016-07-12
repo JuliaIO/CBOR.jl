@@ -27,9 +27,11 @@ function encode_unsigned_with_type(type_bits::UInt8, num::Unsigned)
     elseif num < 0x100000000 # 32 bit unsigned integer
         push!(cbor_bytes, type_bits | 26)
         byte_len = 4
-    else # 64 bit unsigned integer
+    elseif num < 0x10000000000000000 # 64 bit unsigned integer
         push!(cbor_bytes, type_bits | 27)
         byte_len = 8
+    else
+        # panic
     end
 
     for _ in 1:byte_len
@@ -86,6 +88,25 @@ function encode(map::Associative)
         append!(cbor_bytes, encode(key))
         append!(cbor_bytes, encode(value))
     end
+    return cbor_bytes
+end
+
+function encode(big_int::BigInt)
+    hex_str, tag =
+        if big_int >= 0
+            hex(big_int), UInt8(2)
+        else
+            hex(-big_int - 1), UInt(3)
+        end
+
+    cbor_bytes = UInt8[]
+    append!(cbor_bytes, encode_unsigned_with_type(TYPE_6, tag))
+
+    if isodd(length(hex_str))
+        hex_str = "0" * hex_str
+    end
+    append!(cbor_bytes, encode(ASCIIString(hex2bytes(hex_str))) )
+
     return cbor_bytes
 end
 
