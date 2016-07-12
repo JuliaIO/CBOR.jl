@@ -58,19 +58,19 @@ function encode(num::Signed)
     end
 end
 
-function encode(byte_str::ASCIIString)
-    cbor_bytes = encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_str)) )
-    for c in byte_str
-        push!(cbor_bytes, UInt8(c))
-    end
+function encode(ascii_str::ASCIIString)
+    return encode(ascii_str.data)
+end
+
+function encode(bytes::Array{UInt8, 1})
+    cbor_bytes = encode_unsigned_with_type(TYPE_2, Unsigned(length(bytes)) )
+    append!(cbor_bytes, bytes)
     return cbor_bytes
 end
 
 function encode(utf8_str::UTF8String)
     cbor_bytes = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(utf8_str)) )
-    for c in utf8_str.data
-        push!(cbor_bytes, UInt8(c))
-    end
+    append!(cbor_bytes, utf8_str.data)
     return cbor_bytes
 end
 
@@ -105,7 +105,7 @@ function encode(big_int::BigInt)
     if isodd(length(hex_str))
         hex_str = "0" * hex_str
     end
-    append!(cbor_bytes, encode(ASCIIString(hex2bytes(hex_str))) )
+    append!(cbor_bytes, encode(hex2bytes(hex_str)) )
 
     return cbor_bytes
 end
@@ -179,8 +179,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             string_len, bytes_consumed = decode_unsigned(start_idx, bytes)
 
             start_idx += bytes_consumed
-            string =
-                ASCIIString(bytes[start_idx:(start_idx + string_len - 1)])
+            string = bytes[start_idx:(start_idx + string_len - 1)]
             bytes_consumed += string_len
 
             string, bytes_consumed
@@ -221,6 +220,23 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             end
 
             map, bytes_consumed
+        elseif typ == TYPE_6
+            tag, bytes_consumed = decode_unsigned(start_idx, bytes)
+
+            data = if tag == 2 || tag == 3
+                bytes, sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+
+                big_int = parse(BigInt, bytes2hex(bytes), 16)
+                if tag == 3
+                    big_int = -(big_int + 1)
+                end
+
+                big_int
+            end
+
+            data, bytes_consumed
         elseif typ == TYPE_7
             addntl_info = bytes[start_idx] & 0b0001_1111
 
