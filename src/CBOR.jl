@@ -188,10 +188,12 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             map = Dict()
 
             for i in 1:map_len
-                key, key_bytes = decode_next(bytes_consumed + 1, bytes)
+                key, key_bytes =
+                    decode_next(start_idx + bytes_consumed, bytes)
                 bytes_consumed += key_bytes
 
-                value, value_bytes = decode_next(bytes_consumed + 1, bytes)
+                value, value_bytes =
+                    decode_next(start_idx + bytes_consumed, bytes)
                 bytes_consumed += value_bytes
 
                 map[key] = value
