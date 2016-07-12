@@ -149,6 +149,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
 
     data, bytes_consumed =
         if typ == TYPE_0
+            println("TYPE0")
             decode_unsigned(start_idx, bytes)
         elseif typ == TYPE_1
             data, bytes_consumed = decode_unsigned(start_idx, bytes)
@@ -178,7 +179,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
 
             for i in 1:vec_len
                 data[i], sub_bytes_consumed =
-                    decode_next(bytes_consumed + 1, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes)
                 bytes_consumed += sub_bytes_consumed
             end
 
