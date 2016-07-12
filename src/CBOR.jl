@@ -143,7 +143,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
         return true, 1
     elseif first_byte == 0xf4
         return false, 1
-    end 
+    end
 
     typ = first_byte & 0b1110_0000
 
@@ -165,6 +165,24 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             end
 
             data, bytes_consumed
+        elseif typ == TYPE_7
+            addntl_info = bytes[start_idx] & 0b0001_1111
+
+            float_byte_len =
+                if addntl_info == 27
+                    8
+                elseif addntl_info == 26
+                    4
+                elseif addntl_info == 25
+                    # panic
+                end
+
+            float_bytes = UInt8[]
+            for i in (start_idx + 1):(start_idx + float_byte_len)
+                push!(float_bytes, bytes[i])
+            end
+
+            hex2num(bytes2hex(float_bytes)), float_byte_len + 1
         end
 
     return data, bytes_consumed
