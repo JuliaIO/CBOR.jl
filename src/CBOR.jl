@@ -34,7 +34,9 @@ function encode_unsigned_with_type(type_bits::UInt8, num::Unsigned)
         push!(cbor_bytes, type_bits | 27)
         byte_len = 8
     else
-        # panic
+        error(
+            "Encoding of an integer stored as a primitive of size greater " *
+            "than 64-bits is not supported. Use a BigInt instead.")
     end
 
     for _ in 1:byte_len
