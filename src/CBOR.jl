@@ -123,6 +123,7 @@ function encode(float::AbstractFloat)
         unshift!(cbor_bytes, TYPE_7 | UInt8(26))
     else cbor_bytes_len == 2 # IEEE 754 Half-Precision Float
         unshift!(cbor_bytes, TYPE_7 | UInt8(25))
+        warn("Decoding of a 16-bit float is not supported.")
     end
 
     return cbor_bytes
@@ -248,7 +249,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
                 elseif addntl_info == 26
                     4
                 elseif addntl_info == 25
-                    # panic
+                    error("Decoding of a 16-bit float is not supported.")
                 end
 
             hex2num(bytes2hex(
