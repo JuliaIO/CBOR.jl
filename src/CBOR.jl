@@ -249,12 +249,9 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
                     # panic
                 end
 
-            float_bytes = UInt8[]
-            for i in (start_idx + 1):(start_idx + float_byte_len)
-                push!(float_bytes, bytes[i])
-            end
-
-            hex2num(bytes2hex(float_bytes)), float_byte_len + 1
+            hex2num(bytes2hex(
+                bytes[(start_idx + 1):(start_idx + float_byte_len)]
+            )), float_byte_len + 1
         end
 
     return data, bytes_consumed
