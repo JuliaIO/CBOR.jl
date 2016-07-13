@@ -9,6 +9,9 @@ const TYPE_5 = UInt8(5) << 5
 const TYPE_6 = UInt8(6) << 5
 const TYPE_7 = UInt8(7) << 5
 
+const TYPE_BITS_MASK = 0b1110_0000
+const ADDNTL_INFO_MASK = 0b0001_1111
+
 function encode(bool::Bool)
     return UInt8[0xf4 + bool]
 end
@@ -131,7 +134,7 @@ function encode(data)
 end
 
 function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
-    addntl_info = unsigned_bytes[start_idx] & 0b0001_1111
+    addntl_info = unsigned_bytes[start_idx] & ADDNTL_INFO_MASK
 
     if addntl_info < 24 # 0-23
         return addntl_info, sizeof(UInt8)
@@ -158,13 +161,14 @@ end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1})
     first_byte = bytes[start_idx]
+
     if first_byte == 0xf5
         return true, 1
     elseif first_byte == 0xf4
         return false, 1
     end
 
-    typ = first_byte & 0b1110_0000
+    typ = first_byte & TYPE_BITS_MASK
 
     data, bytes_consumed =
         if typ == TYPE_0
@@ -236,7 +240,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
 
             data, bytes_consumed
         elseif typ == TYPE_7
-            addntl_info = bytes[start_idx] & 0b0001_1111
+            addntl_info = bytes[start_idx] & ADDNTL_INFO_MASK
 
             float_byte_len =
                 if addntl_info == 27
