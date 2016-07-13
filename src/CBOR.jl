@@ -98,14 +98,13 @@ end
 
 function encode(big_int::BigInt)
     hex_str, tag =
-        if big_int >= 0
-            hex(big_int), UInt8(2)
+        if big_int < 0
+            hex(-big_int - 1), 3
         else
-            hex(-big_int - 1), UInt(3)
+            hex(big_int), 2
         end
 
-    cbor_bytes = UInt8[]
-    append!(cbor_bytes, encode_unsigned_with_type(TYPE_6, tag))
+    cbor_bytes = encode_unsigned_with_type(TYPE_6, Unsigned(tag))
 
     if isodd(length(hex_str))
         hex_str = "0" * hex_str
