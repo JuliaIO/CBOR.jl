@@ -148,14 +148,12 @@ function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
             zero(UInt64), sizeof(UInt64)
         end
 
-    byte_len += 1
-    start_idx -= 1
-    for i in 2:byte_len
+    for i in 1:byte_len
         data <<= 8
         data |= unsigned_bytes[start_idx + i]
     end
 
-    return data, byte_len
+    return data, byte_len + 1
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1})
