@@ -124,6 +124,12 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
                     end
 
                     big_int
+                else
+                    tagged_data, data_bytes =
+                        decode_next(start_idx + bytes_consumed, bytes)
+                    bytes_consumed += data_bytes
+
+                    Pair(tag, tagged_data)
                 end
 
             data, bytes_consumed
