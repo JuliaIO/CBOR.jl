@@ -150,7 +150,7 @@ type Tag
     val::Unsigned
 end
 
-function encode(tag::Tag, data)
+function encode(tag::Unsigned, data)
     return encode([tag], data)
 end
 
@@ -163,6 +163,20 @@ function encode(tags::Array{Tag, 1}, data)
     append!(cbor_bytes, encode(data))
 
     return cbor_bytes
+end
+
+# ------- encoding for user-defined types
+
+function encode(data)
+    type_map = Dict()
+
+    type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
+
+    for f in fieldnames(data)
+        type_map[UTF8String(string(f))] = data.(f)
+    end
+
+    return encode(type_map)
 end
 
 end
