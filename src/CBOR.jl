@@ -136,10 +136,8 @@ function encode(producer::Task, collection_type)
 
     cbor_bytes = UInt8[typ | ADDNTL_INFO_INDEF]
 
-    e = consume(producer)
-    while typeof(e) != Void
+    for e in producer
         append!(cbor_bytes, encode(e))
-        e = consume(producer)
     end
 
     push!(cbor_bytes, BREAK_TAG)
