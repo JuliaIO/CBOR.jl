@@ -140,7 +140,7 @@ function encode(producer::Task, collection_type)
         append!(cbor_bytes, encode(e))
     end
 
-    push!(cbor_bytes, BREAK_TAG)
+    push!(cbor_bytes, BREAK_INDEF)
     return cbor_bytes
 end
 
