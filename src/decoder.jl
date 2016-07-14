@@ -112,18 +112,19 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
         elseif typ == TYPE_6
             tag, bytes_consumed = decode_unsigned(start_idx, bytes)
 
-            data = if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
-                bytes, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
-                bytes_consumed += sub_bytes_consumed
+            data =
+                if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
+                    big_int_bytes, sub_bytes_consumed =
+                        decode_next(start_idx + bytes_consumed, bytes)
+                    bytes_consumed += sub_bytes_consumed
 
-                big_int = parse(BigInt, bytes2hex(bytes), HEX_BASE)
-                if tag == NEG_BIG_INT_TAG
-                    big_int = -(big_int + 1)
+                    big_int = parse(BigInt, bytes2hex(big_int_bytes), HEX_BASE)
+                    if tag == NEG_BIG_INT_TAG
+                        big_int = -(big_int + 1)
+                    end
+
+                    big_int
                 end
-
-                big_int
-            end
 
             data, bytes_consumed
         elseif typ == TYPE_7
