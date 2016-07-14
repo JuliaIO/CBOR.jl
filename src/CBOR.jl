@@ -144,4 +144,25 @@ function encode(producer::Task, collection_type)
     return cbor_bytes
 end
 
+# ------- encoding with tags
+
+type Tag
+    val::Unsigned
+end
+
+function encode(tag::Tag, data)
+    return encode([tag], data)
+end
+
+function encode(tags::Array{Tag, 1}, data)
+    cbor_bytes = UInt8[]
+
+    for tag in tags
+        append!(cbor_bytes, encode_unsigned_with_type(TYPE_6, tag.val))
+    end
+    append!(cbor_bytes, encode(data))
+
+    return cbor_bytes
+end
+
 end
