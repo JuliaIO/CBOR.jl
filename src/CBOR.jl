@@ -118,4 +118,32 @@ function encode(float::AbstractFloat)
     return cbor_bytes
 end
 
+# ------- encoding for indefinite length collections
+
+function encode(producer::Task, collection_type)
+    typ =
+        if collection_type <: Array{UInt8, 1}
+            TYPE_2
+        elseif collection_type <: UTF8String
+            TYPE_3
+        elseif collection_type <: Union{AbstractVector,Tuple}
+            TYPE_4
+        elseif collection_type <: Associative
+            TYPE_5
+        else
+            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
+        end
+
+    cbor_bytes = UInt8[typ | ADDNTL_INFO_INDEF]
+
+    e = consume(producer)
+    while typeof(e) != Void
+        append!(cbor_bytes, encode(e))
+        e = consume(producer)
+    end
+
+    push!(cbor_bytes, BREAK_TAG)
+    return cbor_bytes
+end
+
 end
