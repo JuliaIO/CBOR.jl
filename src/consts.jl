@@ -32,7 +32,7 @@ const POS_BIG_INT_TAG = UInt8(2)
 const NEG_BIG_INT_TAG = UInt8(3)
 
 const BITS_PER_BYTE = UInt8(8)
-const HEX_BASE = UInt8(16)
+const HEX_BASE = Int(16)
 const LOWEST_ORDER_BYTE_MASK = 0xFF
 
 const SIZE_OF_FLOAT64 = sizeof(Float64)
