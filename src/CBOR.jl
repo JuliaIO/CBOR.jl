@@ -102,7 +102,7 @@ function encode(big_int::BigInt)
     return cbor_bytes
 end
 
-function encode(float::AbstractFloat)
+function encode(float::Union{Float64, Float32, Float16})
     cbor_bytes = hex2bytes(num2hex(float))
     cbor_bytes_len = length(cbor_bytes)
 
