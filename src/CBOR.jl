@@ -150,7 +150,7 @@ type Tag
     val::Unsigned
 end
 
-function encode(tag::Unsigned, data)
+function encode(tag::Tag, data)
     return encode([tag], data)
 end
 
