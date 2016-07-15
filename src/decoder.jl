@@ -65,13 +65,13 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             data = -(Signed(data) + 1)
             data, bytes_consumed
         elseif typ == TYPE_2
-            string_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-
+            byte_string_len, bytes_consumed = decode_unsigned(start_idx, bytes)
             start_idx += bytes_consumed
-            string = bytes[start_idx:(start_idx + string_len - 1)]
-            bytes_consumed += string_len
 
-            string, bytes_consumed
+            byte_string = bytes[start_idx:(start_idx + byte_string_len - 1)]
+            bytes_consumed += byte_string_len
+
+            byte_string, bytes_consumed
         elseif typ == TYPE_3
             string_bytes, bytes_consumed = decode_unsigned(start_idx, bytes)
 
