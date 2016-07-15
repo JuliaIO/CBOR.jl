@@ -46,6 +46,61 @@ function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
     return data, byte_len + 1
 end
 
+function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
+    bytes_consumed = 1
+
+    data =
+        if typ == TYPE_2
+            byte_string = UInt8[]
+            while bytes[start_idx + bytes_consumed] != BREAK_INDEF
+                sub_byte_string, sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+
+                append!(byte_string, sub_byte_string)
+            end
+            byte_string, bytes_consumed
+        elseif typ == TYPE_3
+            utf8_string = UTF8String("")
+            while bytes[start_idx + bytes_consumed] != BREAK_INDEF
+                sub_utf8_string, sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+
+                utf8_string *= sub_utf8_string
+            end
+            utf8_string
+        elseif typ == TYPE_4
+            vec = Vector()
+            while bytes[start_idx + bytes_consumed] != BREAK_INDEF
+                item, sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+
+                push!(vec, item)
+            end
+            vec
+        elseif typ == TYPE_5
+            dict = Dict()
+            while bytes[start_idx + bytes_consumed] != BREAK_INDEF
+                key, sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+
+                value, sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+
+                dict[key] = value
+            end
+            dict
+        end
+
+        bytes_consumed += 1
+
+        return data, bytes_consumed
+end
+
 function decode_next(start_idx, bytes::Array{UInt8, 1})
     first_byte = bytes[start_idx]
 
@@ -64,51 +119,6 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             data, bytes_consumed = decode_unsigned(start_idx, bytes)
             data = -(Signed(data) + 1)
             data, bytes_consumed
-        elseif typ == TYPE_2
-            byte_string_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-            start_idx += bytes_consumed
-
-            byte_string = bytes[start_idx:(start_idx + byte_string_len - 1)]
-            bytes_consumed += byte_string_len
-
-            byte_string, bytes_consumed
-        elseif typ == TYPE_3
-            string_bytes, bytes_consumed = decode_unsigned(start_idx, bytes)
-
-            start_idx += bytes_consumed
-            string =
-                UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)])
-            bytes_consumed += string_bytes
-
-            string, bytes_consumed
-        elseif typ == TYPE_4
-            vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-            data = Vector(vec_len)
-
-            for i in 1:vec_len
-                data[i], sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
-                bytes_consumed += sub_bytes_consumed
-            end
-
-            data, bytes_consumed
-        elseif typ == TYPE_5
-            map_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-            map = Dict()
-
-            for i in 1:map_len
-                key, key_bytes =
-                    decode_next(start_idx + bytes_consumed, bytes)
-                bytes_consumed += key_bytes
-
-                value, value_bytes =
-                    decode_next(start_idx + bytes_consumed, bytes)
-                bytes_consumed += value_bytes
-
-                map[key] = value
-            end
-
-            map, bytes_consumed
         elseif typ == TYPE_6
             tag, bytes_consumed = decode_unsigned(start_idx, bytes)
 
@@ -148,6 +158,58 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
             hex2num(bytes2hex(
                 bytes[(start_idx + 1):(start_idx + float_byte_len)]
             )), float_byte_len + 1
+
+        elseif first_byte & ADDNTL_INFO_MASK == ADDNTL_INFO_INDEF
+            decode_next_indef(start_idx, bytes, typ)
+
+        elseif typ == TYPE_2
+            byte_string_len, bytes_consumed =
+                decode_unsigned(start_idx, bytes)
+            start_idx += bytes_consumed
+
+            byte_string =
+                bytes[start_idx:(start_idx + byte_string_len - 1)]
+            bytes_consumed += byte_string_len
+
+            byte_string, bytes_consumed
+        elseif typ == TYPE_3
+            string_bytes, bytes_consumed =
+                decode_unsigned(start_idx, bytes)
+
+            start_idx += bytes_consumed
+            string =
+                UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)])
+            bytes_consumed += string_bytes
+
+            string, bytes_consumed
+        elseif typ == TYPE_4
+            vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
+            data = Vector(vec_len)
+
+            for i in 1:vec_len
+                data[i], sub_bytes_consumed =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += sub_bytes_consumed
+            end
+
+            data, bytes_consumed
+        elseif typ == TYPE_5
+            map_len, bytes_consumed = decode_unsigned(start_idx, bytes)
+            map = Dict()
+
+            for i in 1:map_len
+                key, key_bytes =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += key_bytes
+
+                value, value_bytes =
+                    decode_next(start_idx + bytes_consumed, bytes)
+                bytes_consumed += value_bytes
+
+                map[key] = value
+            end
+
+            map, bytes_consumed
         end
 
     return data, bytes_consumed
