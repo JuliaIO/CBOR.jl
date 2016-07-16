@@ -120,7 +120,9 @@ end
 
 # ------- encoding for indefinite length collections
 
-function encode(producer::Task, collection_type)
+function encode(pair::Pair{Task, DataType})
+    producer = pair.first
+    collection_type = pair.second
     typ =
         if collection_type <: Array{UInt8, 1}
             TYPE_2
