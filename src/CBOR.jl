@@ -120,10 +120,8 @@ end
 
 # ------- encoding for indefinite length collections
 
-function encode(pair::Pair{Task, DataType})
-    producer = pair.first
-    collection_type = pair.second
-    typ =
+function encode_indef_length_collection(producer::Task, collection_type)
+    const typ =
         if collection_type <: Array{UInt8, 1}
             TYPE_2
         elseif collection_type <: UTF8String
@@ -138,8 +136,14 @@ function encode(pair::Pair{Task, DataType})
 
     cbor_bytes = UInt8[typ | ADDNTL_INFO_INDEF]
 
+    count = 0
     for e in producer
         append!(cbor_bytes, encode(e))
+        count += 1
+    end
+
+    if typ == TYPE_5 && isodd(count)
+        error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
     end
 
     push!(cbor_bytes, BREAK_INDEF)
@@ -148,28 +152,18 @@ end
 
 # ------- encoding with tags
 
-type Tag
-    val::Unsigned
-end
-
-function encode(tag::Tag, data)
-    return encode([tag], data)
-end
-
-function encode(tags::Array{Tag, 1}, data)
-    cbor_bytes = UInt8[]
-
-    for tag in tags
-        append!(cbor_bytes, encode_unsigned_with_type(TYPE_6, tag.val))
-    end
-    append!(cbor_bytes, encode(data))
-
-    return cbor_bytes
+function encode_with_tag(tag::Unsigned, data)
+    cbor_bytes = encode_unsigned_with_type(TYPE_6, tag)
+    return append!(cbor_bytes, encode(data))
 end
 
 # ------- encoding for user-defined types
 
 function encode(data)
+    encode_custom_type(data)
+end
+
+function encode_custom_type(data)
     type_map = Dict()
 
     type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
@@ -178,7 +172,19 @@ function encode(data)
         type_map[UTF8String(string(f))] = data.(f)
     end
 
-    return encode(type_map)
+    encode(type_map)
+end
+
+# ------- dispatching for Pairs
+
+function encode(pair::Pair)
+    if typeof(pair.first) <: Unsigned
+        encode_with_tag(pair.first, pair.second)
+    elseif typeof(pair.first) == Task
+        encode_indef_length_collection(pair.first, pair.second)
+    else
+        encode_custom_type(pair)
+    end
 end
 
 end

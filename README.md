@@ -1,7 +1,7 @@
 # CBOR.jl [![Build Status](https://travis-ci.org/saurvs/CBOR.jl.svg?branch=master)](https://travis-ci.org/saurvs/CBOR.jl)
 
-**CBOR.jl** is a Julia package for working with the **CBOR** data format. It
-provides straightforward APIs for encoding and decoding.
+**CBOR.jl** is a Julia package for working with the **CBOR** data format,
+providing straightforward encoding and decoding for Julia types.
 
 ## About CBOR
 The Concise Binary Object Representation is a *binary* data format that is
@@ -24,7 +24,7 @@ and add the module
 using CBOR
 ```
 
-### The Encoding and Decoding API
+### Encoding and Decoding
 
 Encoding and decoding follow the simple pattern
 
@@ -34,8 +34,9 @@ bytes = CBOR.encode(data)
 data = CBOR.decode(bytes)
 ```
 
-where `bytes` is of type `Array{UInt8, 1}`, and `data` is *usually* of the same
-type passed into `encode()` but always contains the original data.
+where `bytes` is of type `Array{UInt8, 1}`, and `data` returned from `decode()`
+is *usually* of the same type that was passed into `encode()` but always
+contains the original data.
 
 #### Primitive Integers
 
@@ -82,9 +83,27 @@ A `UTF8String` is encoded as CBOR `Type 3`
 
 All `AbstractVector` and `Tuple` types are encoded as CBOR `Type 4`
 
+```julia
+> a = []
+> CBOR.encode(a)
+46-element Array{UInt8, 1}: 0x85 0xfb 0x3f 0xf3 0x33 ... 0x66 0x66 0x66 0x66 0x66
+
+
+> bytes = CBOR.encode([log2(x) for x in 1:10])
+91-element Array{UInt8, 1}: 0x8a 0xfb 0x00 0x00 0x00 ... 0x4f 0x09 0x79 0xa3 0x71
+
+> CBOR.decode(bytes)
+10-element Array{Any, 1}: 0.0 1.0 1.58496 2.0 2.32193 2.58496 2.80735 3.0 3.16993 3.32193
+```
+
 #### Maps
 
 An `Associative` type is encoded as CBOR `Type 5`
+
+```julia
+> d = Dict()
+> CBOR.encode(d)
+```
 
 #### Floats
 
@@ -146,18 +165,57 @@ The `Dict` is then encoded as CBOR `Type 5`.
 
 #### Tagging
 
-To *tag* one of the above types, first wrap the tag *value* in a `CBOR.Tag`
-type, and pass the it and value to be tagged to `encode(tag::Tag, data)`
+To *tag* one of the above types, encode a `Pair` with `first` being an
+**Unsigned** type, and `second` being the data you want to tag.
+
+```julia
+> CBOR.encode(Pair(80, "web servers"))
+```
 
 #### Indefinite length collections
 
 To encode collections of *indefinite* length, first create a producer function
 
+```julia
+function producer()
+    for i in 1:10
+        produce(i*i)
+    end
+end
+```
+
+Wrap it in a `Task`
+
+```julia
+task = Task(producer)
+```
+
+Encode a `Pair` with `first` being the `Task` just created, and `second` being
+a valid collection type you want to encode.
+
+```julia
+> CBOR.encode(Pair(task, AbstractVector))
+```
+
+While encoding an indefinite length `Map`, produce the key first and then the
+value for each key-value pair.
+
+```julia
+function cubes()
+    for i in 1:10
+        produce(i)       # key
+        produce(i*i*i)   # value
+    end
+end
+
+> CBOR.enocde(Pair(Task(cubes), Associative))
+```
+
 ### Caveats
 
 While encoding a `Float16` is supported, decoding one isn't.
 
-Encoding `UInt128` and `Int128` isn't supported; pass a `BigInt` instead.
+Encoding `UInt128` and `Int128` isn't supported; use a `BigInt` instead.
 
 The CBOR array type is always decoded as a `Vector`.
 
