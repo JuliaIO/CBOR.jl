@@ -4,8 +4,8 @@
 providing straightforward encoding and decoding for Julia types.
 
 ## About CBOR
-The Concise Binary Object Representation is a *binary* data format that is
-based upon an extension of the JSON data model. It's stated design goals
+The **Concise Binary Object Representation** is a data format that's based upon
+an extension of the JSON data model, whose stated design goals
 include: an extremely small code size, fairly small message size, and
 extensibility without the need for version negotiation. The format is formally
 defined in [RFC 7049](https://tools.ietf.org/html/rfc7049).
@@ -139,7 +139,7 @@ hexadecimal form of it's numerical value, and tagged with a value of `2` or `3`
 
 #### User-defined types
 
-A user-defined type is encoded through `encode` using reflection *only* if all
+A user-defined type is encoded through `encode` using reflection only if all
 of it's fields are any of the above types.
 
 ```julia
@@ -174,7 +174,8 @@ To *tag* one of the above types, encode a `Pair` with `first` being an
 
 #### Indefinite length collections
 
-To encode collections of *indefinite* length, first create a producer function
+To encode collections of *indefinite* length, first create a *producer*
+function
 
 ```julia
 function producer()
@@ -197,7 +198,7 @@ a valid collection type you want to encode.
 > CBOR.encode(Pair(task, AbstractVector))
 ```
 
-While encoding an indefinite length `Map`, produce the key first and then the
+While encoding an indefinite length `Map`, produce first the key and then the
 value for each key-value pair.
 
 ```julia
@@ -215,7 +216,7 @@ end
 
 While encoding a `Float16` is supported, decoding one isn't.
 
-Encoding `UInt128` and `Int128` isn't supported; use a `BigInt` instead.
+Encoding a `UInt128` and an `Int128` isn't supported; use a `BigInt` instead.
 
 The CBOR array type is always decoded as a `Vector`.
 
