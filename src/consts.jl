@@ -7,6 +7,10 @@ const TYPE_5 = UInt8(5) << 5
 const TYPE_6 = UInt8(6) << 5
 const TYPE_7 = UInt8(7) << 5
 
+const BITS_PER_BYTE = UInt8(8)
+const HEX_BASE = Int(16)
+const LOWEST_ORDER_BYTE_MASK = 0xFF
+
 const TYPE_BITS_MASK = UInt8(0b1110_0000)
 const ADDNTL_INFO_MASK = UInt8(0b0001_1111)
 
@@ -28,16 +32,12 @@ const UINT16_MAX_PLUS_ONE = 0x10000
 const UINT32_MAX_PLUS_ONE = 0x100000000
 const UINT64_MAX_PLUS_ONE = 0x10000000000000000
 
-const POS_BIG_INT_TAG = UInt8(2)
-const NEG_BIG_INT_TAG = UInt8(3)
-
-const BITS_PER_BYTE = UInt8(8)
-const HEX_BASE = Int(16)
-const LOWEST_ORDER_BYTE_MASK = 0xFF
-
 const SIZE_OF_FLOAT64 = sizeof(Float64)
 const SIZE_OF_FLOAT32 = sizeof(Float32)
 const SIZE_OF_FLOAT16 = sizeof(Float16)
+
+const POS_BIG_INT_TAG = UInt8(2)
+const NEG_BIG_INT_TAG = UInt8(3)
 
 const CBOR_TRUE_BYTE = UInt8(0xf5)
 const CBOR_FALSE_BYTE = UInt8(0xf4)

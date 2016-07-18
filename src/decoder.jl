@@ -96,9 +96,9 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
             dict
         end
 
-        bytes_consumed += 1
+    bytes_consumed += 1
 
-        return data, bytes_consumed
+    return data, bytes_consumed
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1})

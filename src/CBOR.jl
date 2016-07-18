@@ -67,7 +67,7 @@ function encode(utf8_str::UTF8String)
     return cbor_bytes
 end
 
-function encode(list::Union{AbstractVector,Tuple})
+function encode(list::Union{AbstractVector, Tuple})
     cbor_bytes = encode_unsigned_with_type(TYPE_4, Unsigned(length(list)) )
     for e in list
         append!(cbor_bytes, encode(e))
@@ -126,7 +126,7 @@ function encode_indef_length_collection(producer::Task, collection_type)
             TYPE_2
         elseif collection_type <: UTF8String
             TYPE_3
-        elseif collection_type <: Union{AbstractVector,Tuple}
+        elseif collection_type <: Union{AbstractVector, Tuple}
             TYPE_4
         elseif collection_type <: Associative
             TYPE_5
