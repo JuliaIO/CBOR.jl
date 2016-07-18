@@ -1,4 +1,4 @@
-# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/CBOR.jl.svg?branch=master)](https://travis-ci.org/saurvs/CBOR.jl)
+# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/CBOR.jl.svg?branch=master)](https://travis-ci.org/saurvs/CBOR.jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/CBOR.jl/blob/master/LICENSE.md)
 
 **CBOR.jl** is a Julia package for working with the **CBOR** data format,
 providing straightforward encoding and decoding for Julia types.
