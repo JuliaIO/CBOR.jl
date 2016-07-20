@@ -6,7 +6,7 @@ providing straightforward encoding and decoding for Julia types.
 ## About CBOR
 The **Concise Binary Object Representation** is a data format that's based upon
 an extension of the JSON data model, whose stated design goals
-include: an extremely small code size, fairly small message size, and
+include: small code size, small message size, and
 extensibility without the need for version negotiation. The format is formally
 defined in [RFC 7049](https://tools.ietf.org/html/rfc7049).
 
@@ -84,9 +84,18 @@ A `UTF8String` is encoded as CBOR `Type 3`
 All `AbstractVector` and `Tuple` types are encoded as CBOR `Type 4`
 
 ```julia
-> a = []
-> CBOR.encode(a)
-46-element Array{UInt8, 1}: 0x85 0xfb 0x3f 0xf3 0x33 ... 0x66 0x66 0x66 0x66 0x66
+> bytes = CBOR.encode((-7, -8, -9))
+4-element Array{UInt8, 1}: 0x83 0x26 0x27 0x28
+
+> CBOR.decode(bytes)
+3-element Array{Any, 1}: -7 -8 -9
+
+
+> bytes = CBOR.encode(["Open", 1, 4, 9.0, UTF8String("the pod bay doors hal)"])
+39-element Array{UInt8, 1}: 0x85 0x44 0x4f 0x70 0x65 ... 0x73 0x20 0x68 0x61 0x6c
+
+> CBOR.decode(bytes)
+5-element Array{Any, 1}: UInt8[0x4f, 0x70, 0x65, 0x6e] 1 4 9.0 "the pod bay doors hal"
 
 
 > bytes = CBOR.encode([log2(x) for x in 1:10])
@@ -102,6 +111,7 @@ An `Associative` type is encoded as CBOR `Type 5`
 
 ```julia
 > d = Dict()
+
 > CBOR.encode(d)
 ```
 
@@ -127,14 +137,14 @@ A `BigInt` type is encoded as an `Array{UInt8, 1}` containing the bytes of the
 hexadecimal form of it's numerical value, and tagged with a value of `2` or `3`
 
 ```julia
-> b = BigInt(factorial(20)); b *= b
-5919012181389927685417441689600000000
+> b = BigInt(factorial(20))
+2432902008176640000
 
-> bytes = CBOR.encode(b * -b)
+> bytes = CBOR.encode(b * b * -b)
 34-element Array{UInt8,1}: 0xc3 0x58 0x1f 0x13 0xd4 ... 0xff 0xff 0xff 0xff 0xff
 
 > CBOR.decode(bytes)
--35034705203442350200541990461054245403670690716216102748160000000000000000
+-14400376622525549608547603031202889616850944000000000000
 ```
 
 #### User-defined types
