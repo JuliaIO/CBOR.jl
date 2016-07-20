@@ -51,7 +51,7 @@ function encode(num::Signed)
     end
 end
 
-function encode(bytes::Array{UInt8, 1})
+function encode(bytes::AbstractVector{UInt8})
     cbor_bytes = encode_unsigned_with_type(TYPE_2, Unsigned(length(bytes)) )
     append!(cbor_bytes, bytes)
     return cbor_bytes
