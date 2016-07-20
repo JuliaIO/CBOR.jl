@@ -51,19 +51,15 @@ function encode(num::Signed)
     end
 end
 
-function encode(ascii_str::ASCIIString)
-    return encode(ascii_str.data)
-end
-
 function encode(bytes::Array{UInt8, 1})
     cbor_bytes = encode_unsigned_with_type(TYPE_2, Unsigned(length(bytes)) )
     append!(cbor_bytes, bytes)
     return cbor_bytes
 end
 
-function encode(utf8_str::UTF8String)
-    cbor_bytes = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(utf8_str)) )
-    append!(cbor_bytes, utf8_str.data)
+function encode(string::Union{UTF8String, ASCIIString})
+    cbor_bytes = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)) )
+    append!(cbor_bytes, string.data)
     return cbor_bytes
 end
 

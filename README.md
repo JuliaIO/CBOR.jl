@@ -60,18 +60,20 @@ as CBOR `Type 0` or `Type 1`
 
 #### Byte Strings
 
-`Array{UInt8, 1}` and `ASCIIString` types are encoded as CBOR `Type 2`
+An `Array{UInt8, 1}` is encoded as CBOR `Type 2`
 
 ```julia
-> CBOR.encode("Valar morghulis")
-16-element Array{UInt8,1}: 0x4f 0x56 0x61 0x6c 0x61 ... 0x68 0x75 0x6c 0x69 0x73
+
 ```
 
 #### UTF8 Strings
 
-A `UTF8String` is encoded as CBOR `Type 3`
+`UTF8String` and `ASCIIString` are encoded as CBOR `Type 3`
 
 ```julia
+> CBOR.encode("Valar morghulis")
+16-element Array{UInt8,1}: 0x4f 0x56 0x61 0x6c 0x61 ... 0x68 0x75 0x6c 0x69 0x73
+
 > bytes = CBOR.encode("אתה יכול לקחת את סוס אל המים, אבל אתה לא יכול להוכיח שום דבר אמיתי")
 119-element Array{UInt8,1}: 0x78 0x75 0xd7 0x90 0xd7 ... 0x99 0xd7 0xaa 0xd7 0x99
 
