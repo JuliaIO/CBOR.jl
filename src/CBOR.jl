@@ -101,7 +101,12 @@ function encode(big_int::BigInt)
 end
 
 function encode(float::Union{Float64, Float32, Float16})
-    cbor_bytes = hex2bytes(num2hex(float))
+    cbor_bytes =
+        if typeof(float) == Float64 && float == Float32(float)
+            hex2bytes(num2hex(Float32(float)) )
+        else
+            hex2bytes(num2hex(float))
+        end
     cbor_bytes_len = length(cbor_bytes)
 
     if cbor_bytes_len == SIZE_OF_FLOAT64
