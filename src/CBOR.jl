@@ -181,8 +181,8 @@ end
 # ------- dispatching for Pairs
 
 function encode(pair::Pair)
-    if typeof(pair.first) <: Unsigned
-        encode_with_tag(pair.first, pair.second)
+    if typeof(pair.first) <: Integer && pair.first >= 0
+        encode_with_tag(Unsigned(pair.first), pair.second)
     elseif typeof(pair.first) == Task
         encode_indef_length_collection(pair.first, pair.second)
     else
