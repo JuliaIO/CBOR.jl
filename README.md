@@ -82,6 +82,22 @@ An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 "אתה יכול לקחת את סוס אל המים, אבל אתה לא יכול להוכיח שום דבר אמיתי"
 ```
 
+#### Floats
+
+`Float64`, `Float32` and `Float16` are encoded as CBOR `Type 7`
+
+```julia
+> CBOR.encode(1.23456789e-300)
+9-element Array{UInt8, 1}: 0xfb 0x01 0xaa 0x74 0xfe 0x1c 0x13 0x2c 0x0e
+
+
+> bytes = CBOR.encode(Float32(pi))
+5-element Array{UInt8, 1}: 0xfa 0x40 0x49 0x0f 0xdb
+
+> CBOR.decode(bytes)
+3.1415927f0
+```
+
 #### Arrays
 
 `AbstractVector` and `Tuple` types, except of course `AbstractVector{UInt8}`, are encoded as CBOR `Type 4`
@@ -114,24 +130,16 @@ An `Associative` type is encoded as CBOR `Type 5`
 
 ```julia
 > d = Dict()
+> d["GNU's"] = "not UNIX"
+> d[Float64(e)] = [2, "+", 0.718281828459045]
 
-> CBOR.encode(d)
-```
-
-#### Floats
-
-`Float64`, `Float32` and `Float16` are encoded as CBOR `Type 7`
-
-```julia
-> CBOR.encode(1.23456789e-300)
-9-element Array{UInt8, 1}: 0xfb 0x01 0xaa 0x74 0xfe 0x1c 0x13 0x2c 0x0e
-
-
-> bytes = CBOR.encode(Float64(pi))
-9-element Array{UInt8, 1}: 0xfb 0x40 0x09 0x21 0xfb 0x54 0x44 0x2d 0x18
+> bytes = CBOR.encode(d)
+38-element Array{UInt8, 1}: 0xa2 0x65 0x47 0x4e 0x55 ... 0x28 0x6f 0x8a 0xd2 0x56
 
 > CBOR.decode(bytes)
-3.141592653589793
+Dict{Any,Any} with 2 entries:
+  "GNU's"           => "not UNIX"
+  2.718281828459045 => Any[0x02, "+", 0.718281828459045]
 ```
 
 #### BigInts
