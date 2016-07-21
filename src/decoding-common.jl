@@ -54,7 +54,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
             byte_string = UInt8[]
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF
                 sub_byte_string, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
                 append!(byte_string, sub_byte_string)
@@ -64,7 +64,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
             utf8_string = UTF8String("")
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF
                 sub_utf8_string, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
                 utf8_string *= sub_utf8_string
@@ -74,7 +74,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
             vec = Vector()
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF
                 item, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
                 push!(vec, item)
@@ -84,11 +84,11 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
             dict = Dict()
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF
                 key, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
                 value, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
                 dict[key] = value
@@ -101,7 +101,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
     return data, bytes_consumed
 end
 
-function decode_next(start_idx, bytes::Array{UInt8, 1})
+function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
     first_byte = bytes[start_idx]
 
     if first_byte == CBOR_TRUE_BYTE
@@ -122,29 +122,40 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
         elseif typ == TYPE_6
             tag, bytes_consumed = decode_unsigned(start_idx, bytes)
 
+            function retrieve_plain_pair()
+                tagged_data, data_bytes =
+                    decode_next(start_idx + bytes_consumed, bytes,
+                                with_iana)
+                bytes_consumed += data_bytes
+
+                return Pair(tag, tagged_data)
+            end
+
             data =
-                if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
-                    big_int_bytes, sub_bytes_consumed =
-                        decode_next(start_idx + bytes_consumed, bytes)
-                    bytes_consumed += sub_bytes_consumed
+                if with_iana
+                    if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
+                        big_int_bytes, sub_bytes_consumed =
+                            decode_next(start_idx + bytes_consumed, bytes,
+                                        with_iana)
+                        bytes_consumed += sub_bytes_consumed
 
-                    big_int = parse(BigInt, bytes2hex(big_int_bytes), HEX_BASE)
-                    if tag == NEG_BIG_INT_TAG
-                        big_int = -(big_int + 1)
+                        big_int = parse(BigInt, bytes2hex(big_int_bytes),
+                                        HEX_BASE)
+                        if tag == NEG_BIG_INT_TAG
+                            big_int = -(big_int + 1)
+                        end
+
+                        big_int
+                    else
+                        retrieve_plain_pair()
                     end
-
-                    big_int
                 else
-                    tagged_data, data_bytes =
-                        decode_next(start_idx + bytes_consumed, bytes)
-                    bytes_consumed += data_bytes
-
-                    Pair(tag, tagged_data)
+                    retrieve_plain_pair()
                 end
 
             data, bytes_consumed
         elseif typ == TYPE_7
-            addntl_info = bytes[start_idx] & ADDNTL_INFO_MASK
+            addntl_info = first_byte & ADDNTL_INFO_MASK
 
             float_byte_len =
                 if addntl_info == ADDNTL_INFO_FLOAT64
@@ -188,7 +199,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
 
             for i in 1:vec_len
                 data[i], sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
             end
 
@@ -199,11 +210,11 @@ function decode_next(start_idx, bytes::Array{UInt8, 1})
 
             for i in 1:map_len
                 key, key_bytes =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += key_bytes
 
                 value, value_bytes =
-                    decode_next(start_idx + bytes_consumed, bytes)
+                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += value_bytes
 
                 map[key] = value
