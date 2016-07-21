@@ -1,6 +1,6 @@
-# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/jl.svg?branch=master)](https://travis-ci.org/saurvs/jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
+# jl [![Build Status](https://travis-ci.org/saurvs/jl.svg?branch=master)](https://travis-ci.org/saurvs/jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
 
-**CBOR.jl** is a Julia package for working with the **CBOR** data format,
+**jl** is a Julia package for working with the **CBOR** data format,
 providing straightforward encoding and decoding for Julia types.
 
 ## About CBOR
@@ -60,10 +60,11 @@ as CBOR `Type 0` or `Type 1`
 
 #### Byte Strings
 
-An `Array{UInt8, 1}` is encoded as CBOR `Type 2`
+An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 
 ```julia
-
+> encode(UInt8[x*x for x in 1:10])
+11-element Array{UInt8, 1}: 0x4a 0x01 0x04 0x09 0x10 0x19 0x24 0x31 0x40 0x51 0x64
 ```
 
 #### UTF8 Strings
@@ -81,9 +82,25 @@ An `Array{UInt8, 1}` is encoded as CBOR `Type 2`
 "אתה יכול לקחת את סוס אל המים, אבל אתה לא יכול להוכיח שום דבר אמיתי"
 ```
 
+#### Floats
+
+`Float64`, `Float32` and `Float16` are encoded as CBOR `Type 7`
+
+```julia
+> encode(1.23456789e-300)
+9-element Array{UInt8, 1}: 0xfb 0x01 0xaa 0x74 0xfe 0x1c 0x13 0x2c 0x0e
+
+
+> bytes = encode(Float32(pi))
+5-element Array{UInt8, 1}: 0xfa 0x40 0x49 0x0f 0xdb
+
+> decode(bytes)
+3.1415927f0
+```
+
 #### Arrays
 
-All `AbstractVector` and `Tuple` types are encoded as CBOR `Type 4`
+`AbstractVector` and `Tuple` types, except of course `AbstractVector{UInt8}`, are encoded as CBOR `Type 4`
 
 ```julia
 > bytes = encode((-7, -8, -9))
@@ -93,11 +110,11 @@ All `AbstractVector` and `Tuple` types are encoded as CBOR `Type 4`
 3-element Array{Any, 1}: -7 -8 -9
 
 
-> bytes = encode(["Open", 1, 4, 9.0, UTF8String("the pod bay doors hal)"])
+> bytes = encode(["Open", 1, 4, 9.0, "the pod bay doors hal"])
 39-element Array{UInt8, 1}: 0x85 0x44 0x4f 0x70 0x65 ... 0x73 0x20 0x68 0x61 0x6c
 
 > decode(bytes)
-5-element Array{Any, 1}: UInt8[0x4f, 0x70, 0x65, 0x6e] 1 4 9.0 "the pod bay doors hal"
+5-element Array{Any, 1}: "Open" 1 4 9.0 "the pod bay doors hal"
 
 
 > bytes = encode([log2(x) for x in 1:10])
@@ -113,24 +130,16 @@ An `Associative` type is encoded as CBOR `Type 5`
 
 ```julia
 > d = Dict()
+> d["GNU's"] = "not UNIX"
+> d[Float64(e)] = [2, "+", 0.718281828459045]
 
-> encode(d)
-```
-
-#### Floats
-
-`Float64`, `Float32` and `Float16` are encoded as CBOR `Type 7`
-
-```julia
-> encode(1.23456789e-300)
-9-element Array{UInt8,1}: 0xfb 0x01 0xaa 0x74 0xfe 0x1c 0x13 0x2c 0x0e
-
-
-> bytes = encode(Float64(pi))
-9-element Array{UInt8,1}: 0xfb 0x40 0x09 0x21 0xfb 0x54 0x44 0x2d 0x18
+> bytes = encode(d)
+38-element Array{UInt8, 1}: 0xa2 0x65 0x47 0x4e 0x55 ... 0x28 0x6f 0x8a 0xd2 0x56
 
 > decode(bytes)
-3.141592653589793
+Dict{Any,Any} with 2 entries:
+  "GNU's"           => "not UNIX"
+  2.718281828459045 => Any[0x02, "+", 0.718281828459045]
 ```
 
 #### BigInts
