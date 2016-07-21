@@ -1,6 +1,6 @@
-# jl [![Build Status](https://travis-ci.org/saurvs/jl.svg?branch=master)](https://travis-ci.org/saurvs/jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
+# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/jl.svg?branch=master)](https://travis-ci.org/saurvs/jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
 
-**jl** is a Julia package for working with the **CBOR** data format,
+**CBOR.jl** is a Julia package for working with the **CBOR** data format,
 providing straightforward encoding and decoding for Julia types.
 
 ## About CBOR
@@ -50,7 +50,6 @@ as CBOR `Type 0` or `Type 1`
 > encode(-135713)
 5-element Array{UInt8,1}: 0x3a 0x00 0x02 0x12 0x20
 
-
 > bytes = encode(typemax(UInt64))
 9-element Array{UInt8,1}: 0x1b 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff
 
@@ -90,7 +89,6 @@ An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 > encode(1.23456789e-300)
 9-element Array{UInt8, 1}: 0xfb 0x01 0xaa 0x74 0xfe 0x1c 0x13 0x2c 0x0e
 
-
 > bytes = encode(Float32(pi))
 5-element Array{UInt8, 1}: 0xfa 0x40 0x49 0x0f 0xdb
 
@@ -109,13 +107,11 @@ An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 > decode(bytes)
 3-element Array{Any, 1}: -7 -8 -9
 
-
 > bytes = encode(["Open", 1, 4, 9.0, "the pod bay doors hal"])
 39-element Array{UInt8, 1}: 0x85 0x44 0x4f 0x70 0x65 ... 0x73 0x20 0x68 0x61 0x6c
 
 > decode(bytes)
 5-element Array{Any, 1}: "Open" 1 4 9.0 "the pod bay doors hal"
-
 
 > bytes = encode([log2(x) for x in 1:10])
 91-element Array{UInt8, 1}: 0x8a 0xfb 0x00 0x00 0x00 ... 0x4f 0x09 0x79 0xa3 0x71
