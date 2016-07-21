@@ -38,6 +38,11 @@ two_way_test_vectors = Dict(
 
     false => hex2bytes("f4"),
     true => hex2bytes("f5"),
+    Null() => hex2bytes("f6"),
+    Undefined() => hex2bytes("f7"),
+    Simple(16) => hex2bytes("f0"),
+    Simple(24) => hex2bytes("f818"),
+    Simple(255) => hex2bytes("f8ff"),
 
     Pair(0, "2013-03-21T20:04:00Z") => hex2bytes("c074323031332d30332d32315432303a30343a30305a"),
     Pair(1, 1363896240) => hex2bytes("c11a514b67b0"),
@@ -70,26 +75,19 @@ two_way_test_vectors = Dict(
 )
 
 for (data, bytes) in two_way_test_vectors
-    @test bytes == encode(data)
-    @test data == decode(bytes)
+    @test isequal(bytes, encode(data))
+    @test isequal(data, decode(bytes))
 end
 
 bytes_to_data_test_vectors = Dict(
+    hex2bytes("fa7fc00000") => NaN32,
     hex2bytes("fa7f800000") => Inf32,
     hex2bytes("faff800000") => -Inf32,
+    hex2bytes("fb7ff8000000000000") => NaN,
     hex2bytes("fb7ff0000000000000") => Inf,
     hex2bytes("fbfff0000000000000") => -Inf
 )
 
 for (bytes, data) in bytes_to_data_test_vectors
-    @test data == decode(bytes)
-end
-
-unequal_bytes_to_data_test_vectors = Dict(
-    hex2bytes("fa7fc00000") => NaN32,
-    hex2bytes("fb7ff8000000000000") => NaN
-)
-
-for (bytes, data) in unequal_bytes_to_data_test_vectors
-    @test data != decode(bytes)
+    @test isequal(data, decode(bytes))
 end

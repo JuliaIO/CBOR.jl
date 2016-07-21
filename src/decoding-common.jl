@@ -104,12 +104,6 @@ end
 function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
     first_byte = bytes[start_idx]
 
-    if first_byte == CBOR_TRUE_BYTE
-        return true, 1
-    elseif first_byte == CBOR_FALSE_BYTE
-        return false, 1
-    end
-
     typ = first_byte & TYPE_BITS_MASK
 
     data, bytes_consumed =
@@ -156,20 +150,47 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             data, bytes_consumed
         elseif typ == TYPE_7
             addntl_info = first_byte & ADDNTL_INFO_MASK
+            bytes_consumed = 1
 
-            float_byte_len =
-                if addntl_info == ADDNTL_INFO_FLOAT64
-                    SIZE_OF_FLOAT64
-                elseif addntl_info == ADDNTL_INFO_FLOAT32
-                    SIZE_OF_FLOAT32
-                elseif addntl_info == ADDNTL_INFO_FLOAT16
-                    error("Decoding of 16-bit float is not supported.")
+            data =
+                if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
+                    bytes_consumed += 1
+                    simple_val =
+                        if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE
+                            addntl_info
+                        else
+                            bytes_consumed += 1
+                            bytes[start_idx + 1]
+                        end
+
+                    if simple_val == SIMPLE_FALSE
+                        false
+                    elseif simple_val == SIMPLE_TRUE
+                        true
+                    elseif simple_val == SIMPLE_NULL
+                        Null()
+                    elseif simple_val == SIMPLE_UNDEF
+                        Undefined()
+                    else
+                        Simple(simple_val)
+                    end
+                else
+                    float_byte_len =
+                        if addntl_info == ADDNTL_INFO_FLOAT64
+                            SIZE_OF_FLOAT64
+                        elseif addntl_info == ADDNTL_INFO_FLOAT32
+                            SIZE_OF_FLOAT32
+                        elseif addntl_info == ADDNTL_INFO_FLOAT16
+                            error("Decoding of 16-bit float is not supported.")
+                        end
+
+                    bytes_consumed += float_byte_len
+                    hex2num(bytes2hex(
+                        bytes[(start_idx + 1):(start_idx + float_byte_len)]
+                    ))
                 end
 
-            hex2num(bytes2hex(
-                bytes[(start_idx + 1):(start_idx + float_byte_len)]
-            )), float_byte_len + 1
-
+            data, bytes_consumed
         elseif first_byte & ADDNTL_INFO_MASK == ADDNTL_INFO_INDEF
             decode_next_indef(start_idx, bytes, typ)
 

@@ -28,6 +28,7 @@ include("decoding-common.jl")
 
 export encode
 export decode, decode_with_iana
+export Simple, Null, Undefined
 
 # ------- straightforward decoding for usual Julia types
 
@@ -195,6 +196,34 @@ function encode(pair::Pair)
     else
         encode_custom_type(pair)
     end
+end
+
+# ------- encoding for Simple types
+
+type Simple
+    val::UInt8
+end
+
+Base.isequal(a::Simple, b::Simple) = Base.isequal(a.val, b.val)
+
+function encode(simple::Simple)
+    encode_unsigned_with_type(TYPE_7, simple.val)
+end
+
+# ------- encoding for Null and Undefined
+
+type Null
+end
+
+type Undefined
+end
+
+function encode(null::Null)
+    return UInt8[CBOR_NULL_BYTE]
+end
+
+function encode(undef::Undefined)
+    return UInt8[CBOR_UNDEF_BYTE]
 end
 
 end
