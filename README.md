@@ -1,4 +1,4 @@
-# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/CBOR.jl.svg?branch=master)](https://travis-ci.org/saurvs/CBOR.jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/CBOR.jl/blob/master/LICENSE.md)
+# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/jl.svg?branch=master)](https://travis-ci.org/saurvs/jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
 
 **CBOR.jl** is a Julia package for working with the **CBOR** data format,
 providing straightforward encoding and decoding for Julia types.
@@ -29,9 +29,9 @@ using CBOR
 Encoding and decoding follow the simple pattern
 
 ```julia
-bytes = CBOR.encode(data)
+bytes = encode(data)
 
-data = CBOR.decode(bytes)
+data = decode(bytes)
 ```
 
 where `bytes` is of type `Array{UInt8, 1}`, and `data` returned from `decode()`
@@ -44,17 +44,17 @@ All `Signed` and `Unsigned` types, *except* `Int128` and `UInt128`, are encoded
 as CBOR `Type 0` or `Type 1`
 
 ```julia
-> CBOR.encode(21)
+> encode(21)
 1-element Array{UInt8,1}: 0x15
 
-> CBOR.encode(-135713)
+> encode(-135713)
 5-element Array{UInt8,1}: 0x3a 0x00 0x02 0x12 0x20
 
 
-> bytes = CBOR.encode(typemax(UInt64))
+> bytes = encode(typemax(UInt64))
 9-element Array{UInt8,1}: 0x1b 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff
 
-> CBOR.decode(bytes)
+> decode(bytes)
 18446744073709551615
 ```
 
@@ -71,13 +71,13 @@ An `Array{UInt8, 1}` is encoded as CBOR `Type 2`
 `UTF8String` and `ASCIIString` are encoded as CBOR `Type 3`
 
 ```julia
-> CBOR.encode("Valar morghulis")
+> encode("Valar morghulis")
 16-element Array{UInt8,1}: 0x4f 0x56 0x61 0x6c 0x61 ... 0x68 0x75 0x6c 0x69 0x73
 
-> bytes = CBOR.encode("אתה יכול לקחת את סוס אל המים, אבל אתה לא יכול להוכיח שום דבר אמיתי")
+> bytes = encode("אתה יכול לקחת את סוס אל המים, אבל אתה לא יכול להוכיח שום דבר אמיתי")
 119-element Array{UInt8,1}: 0x78 0x75 0xd7 0x90 0xd7 ... 0x99 0xd7 0xaa 0xd7 0x99
 
-> CBOR.decode(bytes)
+> decode(bytes)
 "אתה יכול לקחת את סוס אל המים, אבל אתה לא יכול להוכיח שום דבר אמיתי"
 ```
 
@@ -86,24 +86,24 @@ An `Array{UInt8, 1}` is encoded as CBOR `Type 2`
 All `AbstractVector` and `Tuple` types are encoded as CBOR `Type 4`
 
 ```julia
-> bytes = CBOR.encode((-7, -8, -9))
+> bytes = encode((-7, -8, -9))
 4-element Array{UInt8, 1}: 0x83 0x26 0x27 0x28
 
-> CBOR.decode(bytes)
+> decode(bytes)
 3-element Array{Any, 1}: -7 -8 -9
 
 
-> bytes = CBOR.encode(["Open", 1, 4, 9.0, UTF8String("the pod bay doors hal)"])
+> bytes = encode(["Open", 1, 4, 9.0, UTF8String("the pod bay doors hal)"])
 39-element Array{UInt8, 1}: 0x85 0x44 0x4f 0x70 0x65 ... 0x73 0x20 0x68 0x61 0x6c
 
-> CBOR.decode(bytes)
+> decode(bytes)
 5-element Array{Any, 1}: UInt8[0x4f, 0x70, 0x65, 0x6e] 1 4 9.0 "the pod bay doors hal"
 
 
-> bytes = CBOR.encode([log2(x) for x in 1:10])
+> bytes = encode([log2(x) for x in 1:10])
 91-element Array{UInt8, 1}: 0x8a 0xfb 0x00 0x00 0x00 ... 0x4f 0x09 0x79 0xa3 0x71
 
-> CBOR.decode(bytes)
+> decode(bytes)
 10-element Array{Any, 1}: 0.0 1.0 1.58496 2.0 2.32193 2.58496 2.80735 3.0 3.16993 3.32193
 ```
 
@@ -114,7 +114,7 @@ An `Associative` type is encoded as CBOR `Type 5`
 ```julia
 > d = Dict()
 
-> CBOR.encode(d)
+> encode(d)
 ```
 
 #### Floats
@@ -122,14 +122,14 @@ An `Associative` type is encoded as CBOR `Type 5`
 `Float64`, `Float32` and `Float16` are encoded as CBOR `Type 7`
 
 ```julia
-> CBOR.encode(1.23456789e-300)
+> encode(1.23456789e-300)
 9-element Array{UInt8,1}: 0xfb 0x01 0xaa 0x74 0xfe 0x1c 0x13 0x2c 0x0e
 
 
-> bytes = CBOR.encode(Float64(pi))
+> bytes = encode(Float64(pi))
 9-element Array{UInt8,1}: 0xfb 0x40 0x09 0x21 0xfb 0x54 0x44 0x2d 0x18
 
-> CBOR.decode(bytes)
+> decode(bytes)
 3.141592653589793
 ```
 
@@ -142,10 +142,10 @@ hexadecimal form of it's numerical value, and tagged with a value of `2` or `3`
 > b = BigInt(factorial(20))
 2432902008176640000
 
-> bytes = CBOR.encode(b * b * -b)
+> bytes = encode(b * b * -b)
 34-element Array{UInt8,1}: 0xc3 0x58 0x1f 0x13 0xd4 ... 0xff 0xff 0xff 0xff 0xff
 
-> CBOR.decode(bytes)
+> decode(bytes)
 -14400376622525549608547603031202889616850944000000000000
 ```
 
@@ -181,7 +181,7 @@ To *tag* one of the above types, encode a `Pair` with `first` being an
 **Unsigned** type, and `second` being the data you want to tag.
 
 ```julia
-> CBOR.encode(Pair(80, "web servers"))
+> encode(Pair(80, "web servers"))
 ```
 
 #### Indefinite length collections
@@ -207,7 +207,7 @@ Encode a `Pair` with `first` being the `Task` just created, and `second` being
 a valid collection type you want to encode.
 
 ```julia
-> CBOR.encode(Pair(task, AbstractVector))
+> encode(Pair(task, AbstractVector))
 ```
 
 While encoding an indefinite length `Map`, produce first the key and then the
@@ -221,7 +221,7 @@ function cubes()
     end
 end
 
-> CBOR.enocde(Pair(Task(cubes), Associative))
+> enocde(Pair(Task(cubes), Associative))
 ```
 
 ### Caveats

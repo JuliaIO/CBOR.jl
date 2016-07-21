@@ -22,9 +22,11 @@ THE SOFTWARE.
 
 module CBOR
 
-include("consts.jl")
-include("encoder.jl")
-include("decoder.jl")
+include("constants.jl")
+include("encoding-common.jl")
+include("decoding-common.jl")
+
+export encode, decode
 
 # ------- straightforward decoding for usual Julia types
 
