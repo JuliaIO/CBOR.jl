@@ -1,4 +1,4 @@
-# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/jl.svg?branch=master)](https://travis-ci.org/saurvs/jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
+# CBOR.jl [![Build Status](https://travis-ci.org/saurvs/CBOR.jl.svg?branch=master)](https://travis-ci.org/saurvs/CBOR.jl) [![](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/saurvs/jl/blob/master/LICENSE.md)
 
 **CBOR.jl** is a Julia package for working with the **CBOR** data format,
 providing straightforward encoding and decoding for Julia types.
@@ -66,7 +66,7 @@ An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 11-element Array{UInt8, 1}: 0x4a 0x01 0x04 0x09 0x10 0x19 0x24 0x31 0x40 0x51 0x64
 ```
 
-#### UTF8 Strings
+#### Strings
 
 `UTF8String` and `ASCIIString` are encoded as CBOR `Type 3`
 
@@ -98,7 +98,8 @@ An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 
 #### Arrays
 
-`AbstractVector` and `Tuple` types, except of course `AbstractVector{UInt8}`, are encoded as CBOR `Type 4`
+`AbstractVector` and `Tuple` types, except of course `AbstractVector{UInt8}`,
+are encoded as CBOR `Type 4`
 
 ```julia
 > bytes = encode((-7, -8, -9))
@@ -138,10 +139,28 @@ Dict{Any,Any} with 2 entries:
   2.718281828459045 => Any[0x02, "+", 0.718281828459045]
 ```
 
-#### BigInts
+#### Tagging
 
-A `BigInt` type is encoded as an `Array{UInt8, 1}` containing the bytes of the
-hexadecimal form of it's numerical value, and tagged with a value of `2` or `3`
+To *tag* one of the above types, encode a `Pair` with `first` being an
+**non-negative** integer, and `second` being the data you want to tag.
+
+```julia
+> bytes = encode(Pair(80, "web servers"))
+
+> data = decode(bytes)
+0x50=>"HTTP Web Server"
+```
+
+There exists an [IANA registery](http://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml)
+which assigns certain meanings to tags; for example, a UTF8 string tagged
+with a value of `32` is to be interpreted as a
+[Uniform Resource Locater](https://tools.ietf.org/html/rfc3986). To decode a
+tagged CBOR data item, and then to automatically interpret the meaning of the
+tag, use `decode_with_iana`.
+
+For example, a Julia `BigInt` type is encoded as an `Array{UInt8, 1}` containing
+the bytes of it's hexadecimal representation, and tagged with a value of `2` or
+`3`
 
 ```julia
 > b = BigInt(factorial(20))
@@ -149,45 +168,57 @@ hexadecimal form of it's numerical value, and tagged with a value of `2` or `3`
 
 > bytes = encode(b * b * -b)
 34-element Array{UInt8,1}: 0xc3 0x58 0x1f 0x13 0xd4 ... 0xff 0xff 0xff 0xff 0xff
+```
 
+To decode `bytes` *without* interpreting the meaning of the tag, use `decode`
+
+```julia
 > decode(bytes)
+0x03 => UInt8[0x96, 0x58, 0xd1, 0x85, 0xdb .. 0xff 0xff 0xff 0xff 0xff]
+```
+To decode `bytes` and to interpret the meaning of the tag, use
+`decode_with_iana`
+
+```julia
+> decode_with_iana(bytes)
 -14400376622525549608547603031202889616850944000000000000
 ```
 
-#### User-defined types
+Currently, only `BigInt` is supported for automatically tagged encoding and
+decoding; more Julia types will be added in the future.
 
-A user-defined type is encoded through `encode` using reflection only if all
-of it's fields are any of the above types.
+#### Composite Types
+
+A generic `DataType` that isn't one of the above types is encoded through
+`encode` using reflection. This is supported only if all of the fields of the
+type belong to one of the above types.
+
+For example, say you have a user-defined type `Point`
 
 ```julia
 type Point
     x::Int64
     y::Float64
+    space::UTF8String
 end
+
+point = Point(1, 3.4, "Euclidean")
 ```
 
-When `Point` is passed into `encode`, it is first converted to a `Dict`
+When `point` is passed into `encode`, it is first converted to a `Dict`
 containing the symbolic names of it's fields as keys associated to their
 respective values and a `"type"` key associated to the type's
 symbolic name, like so
 
 ```julia
-Dict{Any,Any} with 3 entries:
-  "x"    => 0x01
-  "type" => "Point"
-  "y"    => 2.3
+Dict{Any, Any} with 3 entries:
+  "x"     => 0x01
+  "type"  => "Point"
+  "y"     => 3.4
+  "space" => "Euclidean"
 ```
 
 The `Dict` is then encoded as CBOR `Type 5`.
-
-#### Tagging
-
-To *tag* one of the above types, encode a `Pair` with `first` being an
-**Unsigned** type, and `second` being the data you want to tag.
-
-```julia
-> encode(Pair(80, "web servers"))
-```
 
 #### Indefinite length collections
 
@@ -213,6 +244,10 @@ a valid collection type you want to encode.
 
 ```julia
 > encode(Pair(task, AbstractVector))
+18-element Array{UInt8, 1}: 0x9f 0x01 0x04 0x09 0x10 ... 0x18 0x51 0x18 0x64 0xff
+
+> decode(bytes)
+10-element Array{Any, 1}: 1 4 9 16 25 36 49 64 81 100
 ```
 
 While encoding an indefinite length `Map`, produce first the key and then the
@@ -226,7 +261,38 @@ function cubes()
     end
 end
 
-> enocde(Pair(Task(cubes), Associative))
+> bytes = encode(Pair(Task(cubes), Associative))
+34-element Array{UInt8, 1}: 0xbf 0x01 0x01 0x02 0x08 ... 0x0a 0x19 0x03 0xe8 0xff
+
+> decode(bytes)
+Dict{Any, Any} with 10 entries:
+  0x07 => 0x0157
+  0x04 => 0x40
+  0x09 => 0x02d9
+  0x0a => 0x03e8
+  0x02 => 0x08
+  0x03 => 0x1b
+  0x05 => 0x7d
+  0x08 => 0x0200
+  0x06 => 0xd8
+  0x01 => 0x01s
+```
+
+Note that when an indefinite length CBOR `Type 2` or `Type 3` is decoded,
+the result is a *concatenation* of the individual elements.
+
+```julia
+function producer()
+    for c in ["F", "ire", " ", "and", " ", "Blo", "od"]
+        produce(c)
+    end
+end
+
+> bytes = encode(Pair(Task(producer), UTF8String))
+23-element Array{UInt8, 1}: 0x7f 0x61 0x46 0x63 0x69 ... 0x6f 0x62 0x6f 0x64 0xff
+
+> decode(bytes)
+"Fire and Blood"
 ```
 
 ### Caveats
@@ -239,6 +305,4 @@ The CBOR array type is always decoded as a `Vector`.
 
 The CBOR map type is always decoded as a `Dict`.
 
-Data tagged with values that are assigned a meaning in the *IANA* registery are
-automatically interpreted and converted to appropriate Julia types whenever
-possible.
+Decoding CBOR data that isn't well-formed is unpredictable.
