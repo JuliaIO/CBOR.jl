@@ -67,7 +67,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
                 sub_utf8_string, sub_bytes_consumed =
                     decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
-                
+
                 utf8_string *= sub_utf8_string
             end
             utf8_string
@@ -112,7 +112,11 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             decode_unsigned(start_idx, bytes)
         elseif typ == TYPE_1
             data, bytes_consumed = decode_unsigned(start_idx, bytes)
-            data = -(Signed(data) + 1)
+            if (i = Int128(data) + 1) > typemax(Int64)
+                data = -i
+            else
+                data = -(Signed(data) + 1)
+            end
             data, bytes_consumed
         elseif typ == TYPE_6
             tag, bytes_consumed = decode_unsigned(start_idx, bytes)

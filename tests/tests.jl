@@ -17,6 +17,8 @@ two_way_test_vectors = Dict(
     1000 => hex2bytes("1903e8"),
     1000000 => hex2bytes("1a000f4240"),
     1000000000000 => hex2bytes("1b000000e8d4a51000"),
+    18446744073709551615 => hex2bytes("1bffffffffffffffff"),
+    -18446744073709551616 => hex2bytes("3bffffffffffffffff"),
     -1 => hex2bytes("20"),
     -10 => hex2bytes("29"),
     -100 => hex2bytes("3863"),
@@ -90,4 +92,14 @@ bytes_to_data_test_vectors = Dict(
 
 for (bytes, data) in bytes_to_data_test_vectors
     @test isequal(data, decode(bytes))
+end
+
+iana_test_vector = Dict(
+    BigInt(18446744073709551616) => hex2bytes("c249010000000000000000"),
+    BigInt(-18446744073709551617) => hex2bytes("c349010000000000000000")
+)
+
+for (data, bytes) in iana_test_vector
+    @test isequal(bytes, encode(data))
+    @test isequal(data, decode_with_iana(bytes))
 end
