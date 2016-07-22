@@ -46,12 +46,14 @@ two_way_test_vectors = Dict(
     Simple(24) => hex2bytes("f818"),
     Simple(255) => hex2bytes("f8ff"),
 
-    Pair(0, "2013-03-21T20:04:00Z") => hex2bytes("c074323031332d30332d32315432303a30343a30305a"),
+    Pair(0, "2013-03-21T20:04:00Z") =>
+        hex2bytes("c074323031332d30332d32315432303a30343a30305a"),
     Pair(1, 1363896240) => hex2bytes("c11a514b67b0"),
     Pair(1, 1363896240.5) => hex2bytes("c1fb41d452d9ec200000"),
     Pair(23, hex2bytes("01020304")) => hex2bytes("d74401020304"),
     Pair(24, hex2bytes("6449455446")) => hex2bytes("d818456449455446"),
-    Pair(32, "http://www.example.com") => hex2bytes("d82076687474703a2f2f7777772e6578616d706c652e636f6d"),
+    Pair(32, "http://www.example.com") =>
+        hex2bytes("d82076687474703a2f2f7777772e6578616d706c652e636f6d"),
 
     UInt8[] => hex2bytes("40"),
     hex2bytes("01020304") => hex2bytes("4401020304"),
@@ -66,12 +68,14 @@ two_way_test_vectors = Dict(
     [] => hex2bytes("80"),
     [1, 2, 3] => hex2bytes("83010203"),
     Any[1, [2, 3], [4, 5]] => hex2bytes("8301820203820405"),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25] => hex2bytes("98190102030405060708090a0b0c0d0e0f101112131415161718181819"),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25] =>
+        hex2bytes("98190102030405060708090a0b0c0d0e0f101112131415161718181819"),
 
     Dict() => hex2bytes("a0"),
     OrderedDict(1=>2, 3=>4) => hex2bytes("a201020304"),
     OrderedDict("a"=>1, "b"=>[2, 3]) => hex2bytes("a26161016162820203"),
-    OrderedDict("a"=>"A", "b"=>"B", "c"=>"C", "d"=>"D", "e"=>"E") => hex2bytes("a56161614161626142616361436164614461656145"),
+    OrderedDict("a"=>"A", "b"=>"B", "c"=>"C", "d"=>"D", "e"=>"E") =>
+        hex2bytes("a56161614161626142616361436164614461656145"),
 
     ["a", Dict("b"=>"c")] => hex2bytes("826161a161626163")
 )
@@ -102,4 +106,40 @@ iana_test_vector = Dict(
 for (data, bytes) in iana_test_vector
     @test isequal(bytes, encode(data))
     @test isequal(data, decode_with_iana(bytes))
+end
+
+indef_length_coll_test_vectors = Dict(
+    Any[["Hello", " ", "world"], "Hello world", UTF8String] =>
+        hex2bytes("7f6548656c6c6f612065776f726c64ff"),
+    Any["Hello world".data, "Hello world".data, Array{UInt8, 1}] =>
+        hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
+    Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
+        hex2bytes("9f01fb40026666666666666754776964646c65ff"),
+    Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
+        Associative] => hex2bytes("bf0102fb400999999999999a63332e32ff")
+)
+
+coll = []
+function list_producer()
+    for e in coll
+        produce(e)
+    end
+end
+function map_producer()
+    for (k, v) in coll
+        produce(k)
+        produce(v)
+    end
+end
+
+for (data, bytes) in indef_length_coll_test_vectors
+    coll = data[1]
+    task =
+        if data[3] <: Associative
+            Task(map_producer)
+        else
+            Task(list_producer)
+        end
+    @test isequal(bytes, encode(Pair(task, data[3])) )
+    @test isequal(data[2], decode(bytes))
 end
