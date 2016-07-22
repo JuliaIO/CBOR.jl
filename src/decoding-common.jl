@@ -58,9 +58,9 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
                     decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
-                append!(byte_string, sub_byte_string)
+                push!(byte_string, sub_byte_string)
             end
-            byte_string, bytes_consumed
+            byte_string
         elseif typ == TYPE_3
             utf8_string = UTF8String("")
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF

@@ -133,9 +133,9 @@ end
 
 function encode_indef_length_collection(producer::Task, collection_type)
     const typ =
-        if collection_type <: Array{UInt8, 1}
+        if collection_type <: AbstractVector{UInt8}
             TYPE_2
-        elseif collection_type <: UTF8String
+        elseif collection_type <: Union{UTF8String, ASCIIString}
             TYPE_3
         elseif collection_type <: Union{AbstractVector, Tuple}
             TYPE_4
