@@ -46,7 +46,8 @@ function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
     return data, byte_len + 1
 end
 
-function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
+function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
+                           with_iana::Bool)
     bytes_consumed = 1
 
     data =
@@ -66,7 +67,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8)
                 sub_utf8_string, sub_bytes_consumed =
                     decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
-
+                
                 utf8_string *= sub_utf8_string
             end
             utf8_string
@@ -192,7 +193,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
 
             data, bytes_consumed
         elseif first_byte & ADDNTL_INFO_MASK == ADDNTL_INFO_INDEF
-            decode_next_indef(start_idx, bytes, typ)
+            decode_next_indef(start_idx, bytes, typ, with_iana)
 
         elseif typ == TYPE_2
             byte_string_len, bytes_consumed =
