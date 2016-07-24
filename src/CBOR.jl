@@ -164,8 +164,7 @@ end
 # ------- encoding with tags
 
 function encode_with_tag(tag::Unsigned, data)
-    cbor_bytes = encode_unsigned_with_type(TYPE_6, tag)
-    return append!(cbor_bytes, encode(data))
+    return UInt8[encode_unsigned_with_type(TYPE_6, tag); encode(data)]
 end
 
 # ------- encoding for user-defined types
