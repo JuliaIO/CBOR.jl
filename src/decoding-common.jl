@@ -186,7 +186,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                         elseif addntl_info == ADDNTL_INFO_FLOAT32
                             SIZE_OF_FLOAT32
                         elseif addntl_info == ADDNTL_INFO_FLOAT16
-                            error("Decoding of 16-bit float is not supported.")
+                            error("Decoding 16-bit floats isn't supported.")
                         end
 
                     bytes_consumed += float_byte_len

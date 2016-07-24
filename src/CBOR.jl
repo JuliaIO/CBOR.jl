@@ -109,25 +109,22 @@ function encode(big_int::BigInt)
 end
 
 function encode(float::Union{Float64, Float32, Float16})
-    cbor_bytes =
-        if typeof(float) == Float64 && float == Float32(float)
-            hex2bytes(num2hex(Float32(float)) )
+    flt, addntl_info =
+        if sizeof(float) == SIZE_OF_FLOAT64
+            if float == Float32(float)
+                Float32(float), ADDNTL_INFO_FLOAT32
+            else
+                float, ADDNTL_INFO_FLOAT64
+            end
+        elseif sizeof(float) == SIZE_OF_FLOAT32
+            float, ADDNTL_INFO_FLOAT32
         else
-            hex2bytes(num2hex(float))
+            warn("Decoding 16-bit floats isn't supported.")
+            float, ADDNTL_INFO_FLOAT16
         end
-    cbor_bytes_len = length(cbor_bytes)
-
-    if cbor_bytes_len == SIZE_OF_FLOAT64
-        unshift!(cbor_bytes, TYPE_7 | ADDNTL_INFO_FLOAT64)
-    elseif cbor_bytes_len == SIZE_OF_FLOAT32
-        unshift!(cbor_bytes, TYPE_7 | ADDNTL_INFO_FLOAT32)
-    else cbor_bytes_len == SIZE_OF_FLOAT16
-        unshift!(cbor_bytes, TYPE_7 | ADDNTL_INFO_FLOAT16)
-        warn("Decoding of 16-bit float is not supported.")
-    end
-
-    return cbor_bytes
+    return UInt8[TYPE_7 | addntl_info; hex2bytes(num2hex(flt))]
 end
+
 
 # ------- encoding for indefinite length collections
 
