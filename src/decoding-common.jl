@@ -62,15 +62,15 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
             end
             byte_string
         elseif typ == TYPE_3
-            utf8_string = UTF8String("")
+            buf = IOBuffer()
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF
                 sub_utf8_string, sub_bytes_consumed =
                     decode_next(start_idx + bytes_consumed, bytes, with_iana)
                 bytes_consumed += sub_bytes_consumed
 
-                utf8_string *= sub_utf8_string
+                write(buf, sub_utf8_string)
             end
-            utf8_string
+            takebuf_string(buf)
         elseif typ == TYPE_4
             vec = Vector()
             while bytes[start_idx + bytes_consumed] != BREAK_INDEF
