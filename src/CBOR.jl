@@ -175,14 +175,10 @@ function encode(data)
 end
 
 function encode_custom_type(data)
-    type_map = Dict()
-
-    type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
-
+    type_map = Dict{UTF8String, Any}("type" => string(typeof(data)) )
     for f in fieldnames(data)
-        type_map[UTF8String(string(f))] = data.(f)
+        type_map[string(f)] = data.(f)
     end
-
     encode(type_map)
 end
 
