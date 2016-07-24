@@ -97,15 +97,11 @@ function encode(big_int::BigInt)
         else
             hex(big_int), POS_BIG_INT_TAG
         end
-
-    cbor_bytes = encode_unsigned_with_type(TYPE_6, Unsigned(tag))
-
     if isodd(length(hex_str))
         hex_str = "0" * hex_str
     end
-    append!(cbor_bytes, encode(hex2bytes(hex_str)) )
-
-    return cbor_bytes
+    return UInt8[encode_unsigned_with_type(TYPE_6, Unsigned(tag));
+                 encode(hex2bytes(hex_str))]
 end
 
 function encode(float::Union{Float64, Float32, Float16})
