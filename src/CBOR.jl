@@ -62,15 +62,13 @@ function encode(num::Signed)
 end
 
 function encode(bytes::AbstractVector{UInt8})
-    cbor_bytes = encode_unsigned_with_type(TYPE_2, Unsigned(length(bytes)) )
-    append!(cbor_bytes, bytes)
-    return cbor_bytes
+    return UInt8[encode_unsigned_with_type(TYPE_2, Unsigned(length(bytes)) );
+                 bytes]
 end
 
 function encode(string::Union{UTF8String, ASCIIString})
-    cbor_bytes = encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)) )
-    append!(cbor_bytes, string.data)
-    return cbor_bytes
+    return UInt8[encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)) );
+                 string.data]
 end
 
 function encode(list::Union{AbstractVector, Tuple})
