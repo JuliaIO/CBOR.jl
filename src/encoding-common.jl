@@ -24,20 +24,20 @@ function encode_unsigned_with_type(type_bits::UInt8,
                                    num::Unsigned,
                                    bytes::Array{UInt8, 1})
     if num < SINGLE_BYTE_UINT_PLUS_ONE
-        byte_len = 0
-        addntl_info = num
+        const byte_len = 0
+        const addntl_info = num
     elseif num < UINT8_MAX_PLUS_ONE
-        byte_len = sizeof(UInt8)
-        addntl_info = ADDNTL_INFO_UINT8
+        const byte_len = sizeof(UInt8)
+        const addntl_info = ADDNTL_INFO_UINT8
     elseif num < UINT16_MAX_PLUS_ONE
-        byte_len = sizeof(UInt16)
-        addntl_info = ADDNTL_INFO_UINT16
+        const byte_len = sizeof(UInt16)
+        const addntl_info = ADDNTL_INFO_UINT16
     elseif num < UINT32_MAX_PLUS_ONE
-        byte_len = sizeof(UInt32)
-        addntl_info = ADDNTL_INFO_UINT32
+        const byte_len = sizeof(UInt32)
+        const addntl_info = ADDNTL_INFO_UINT32
     elseif num < UINT64_MAX_PLUS_ONE
-        byte_len = sizeof(UInt64)
-        addntl_info = ADDNTL_INFO_UINT64
+        const byte_len = sizeof(UInt64)
+        const addntl_info = ADDNTL_INFO_UINT64
     else
         error("128-bits ints can't be encoded in the CBOR format.")
     end
@@ -95,12 +95,13 @@ function encode(map::Associative, bytes::Array{UInt8, 1})
 end
 
 function encode(big_int::BigInt, bytes::Array{UInt8, 1})
-    hex_str, tag =
-        if big_int < 0
-            hex(-big_int - 1), NEG_BIG_INT_TAG
-        else
-            hex(big_int), POS_BIG_INT_TAG
-        end
+    if big_int < 0
+        const hex_str = hex(-big_int - 1)
+        const tag = NEG_BIG_INT_TAG
+    else
+        const hex_str = hex(big_int)
+        const tag = POS_BIG_INT_TAG
+    end
 
     encode_unsigned_with_type(TYPE_6, Unsigned(tag), bytes)
 
@@ -112,13 +113,12 @@ function encode(big_int::BigInt, bytes::Array{UInt8, 1})
 end
 
 function encode(float::Union{Float64, Float32, Float16}, bytes::Array{UInt8, 1})
-    float_bytes =
-        if typeof(float) == Float64 && float == Float32(float)
-            hex2bytes(num2hex(Float32(float)) )
-        else
-            hex2bytes(num2hex(float))
-        end
-    float_bytes_len = length(float_bytes)
+    if typeof(float) == Float64 && float == Float32(float)
+        const float_bytes = hex2bytes(num2hex(Float32(float)) )
+    else
+        const float_bytes = hex2bytes(num2hex(float))
+    end
+    const float_bytes_len = length(float_bytes)
 
     if float_bytes_len == SIZE_OF_FLOAT64
         push!(bytes, TYPE_7 | ADDNTL_INFO_FLOAT64)
@@ -150,18 +150,17 @@ end
 
 function encode_indef_length_collection(producer::Task, collection_type,
                                         bytes::Array{UInt8, 1})
-    const typ =
-        if collection_type <: AbstractVector{UInt8}
-            TYPE_2
-        elseif collection_type <: Union{UTF8String, ASCIIString}
-            TYPE_3
-        elseif collection_type <: Union{AbstractVector, Tuple}
-            TYPE_4
-        elseif collection_type <: Associative
-            TYPE_5
-        else
-            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
-        end
+    if collection_type <: AbstractVector{UInt8}
+        const typ = TYPE_2
+    elseif collection_type <: Union{UTF8String, ASCIIString}
+        const typ = TYPE_3
+    elseif collection_type <: Union{AbstractVector, Tuple}
+        const typ = TYPE_4
+    elseif collection_type <: Associative
+        const typ = TYPE_5
+    else
+        error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
+    end
 
     push!(bytes, typ | ADDNTL_INFO_INDEF)
 

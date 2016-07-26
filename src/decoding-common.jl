@@ -21,22 +21,23 @@ THE SOFTWARE.
 =#
 
 function decode_unsigned(start_idx, unsigned_bytes::Array{UInt8, 1})
-    addntl_info = unsigned_bytes[start_idx] & ADDNTL_INFO_MASK
+    const addntl_info = unsigned_bytes[start_idx] & ADDNTL_INFO_MASK
 
     if addntl_info < SINGLE_BYTE_UINT_PLUS_ONE
         return addntl_info, sizeof(UInt8)
+    elseif addntl_info == ADDNTL_INFO_UINT8
+        const data = zero(UInt8)
+        const byte_len = sizeof(UInt8)
+    elseif addntl_info == ADDNTL_INFO_UINT16
+        const data = zero(UInt16)
+        const byte_len = sizeof(UInt16)
+    elseif addntl_info == ADDNTL_INFO_UINT32
+        const data = zero(UInt32)
+        const byte_len = sizeof(UInt32)
+    elseif addntl_info == ADDNTL_INFO_UINT64
+        const data = zero(UInt64)
+        const byte_len = sizeof(UInt64)
     end
-
-    data, byte_len =
-        if addntl_info == ADDNTL_INFO_UINT8
-            zero(UInt8), sizeof(UInt8)
-        elseif addntl_info == ADDNTL_INFO_UINT16
-            zero(UInt16), sizeof(UInt16)
-        elseif addntl_info == ADDNTL_INFO_UINT32
-            zero(UInt32), sizeof(UInt32)
-        elseif addntl_info == ADDNTL_INFO_UINT64
-            zero(UInt64), sizeof(UInt64)
-        end
 
     for i in 1:byte_len
         data <<= BITS_PER_BYTE
@@ -103,9 +104,9 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
-    first_byte = bytes[start_idx]
+    const first_byte = bytes[start_idx]
 
-    typ = first_byte & TYPE_BITS_MASK
+    const typ = first_byte & TYPE_BITS_MASK
 
     data, bytes_consumed =
         if typ == TYPE_0
@@ -154,19 +155,18 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
 
             data, bytes_consumed
         elseif typ == TYPE_7
-            addntl_info = first_byte & ADDNTL_INFO_MASK
+            const addntl_info = first_byte & ADDNTL_INFO_MASK
             bytes_consumed = 1
 
             data =
                 if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
                     bytes_consumed += 1
-                    simple_val =
-                        if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE
-                            addntl_info
-                        else
-                            bytes_consumed += 1
-                            bytes[start_idx + 1]
-                        end
+                    if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE
+                        const simple_val = addntl_info
+                    else
+                        bytes_consumed += 1
+                        const simple_val = bytes[start_idx + 1]
+                    end
 
                     if simple_val == SIMPLE_FALSE
                         false
@@ -180,14 +180,13 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                         Simple(simple_val)
                     end
                 else
-                    float_byte_len =
-                        if addntl_info == ADDNTL_INFO_FLOAT64
-                            SIZE_OF_FLOAT64
-                        elseif addntl_info == ADDNTL_INFO_FLOAT32
-                            SIZE_OF_FLOAT32
-                        elseif addntl_info == ADDNTL_INFO_FLOAT16
-                            error("Decoding 16-bit floats isn't supported.")
-                        end
+                    if addntl_info == ADDNTL_INFO_FLOAT64
+                        const float_byte_len = SIZE_OF_FLOAT64
+                    elseif addntl_info == ADDNTL_INFO_FLOAT32
+                        const float_byte_len = SIZE_OF_FLOAT32
+                    elseif addntl_info == ADDNTL_INFO_FLOAT16
+                        error("Decoding 16-bit floats isn't supported.")
+                    end
 
                     bytes_consumed += float_byte_len
                     hex2num(bytes2hex(
