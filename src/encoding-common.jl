@@ -74,9 +74,9 @@ function encode(byte_string::AbstractVector{UInt8}, bytes::Array{UInt8, 1})
     append!(bytes, byte_string)
 end
 
-function encode(string::Union{UTF8String, ASCIIString}, bytes::Array{UInt8, 1})
+function encode(string::String, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-    append!(bytes, string.data)
+    append!(bytes, Vector{UInt8}(string))
 end
 
 function encode(list::Union{AbstractVector, Tuple}, bytes::Array{UInt8, 1})
@@ -152,7 +152,7 @@ function encode_indef_length_collection(producer::Task, collection_type,
                                         bytes::Array{UInt8, 1})
     if collection_type <: AbstractVector{UInt8}
         const typ = TYPE_2
-    elseif collection_type <: Union{UTF8String, ASCIIString}
+    elseif collection_type <: String
         const typ = TYPE_3
     elseif collection_type <: Union{AbstractVector, Tuple}
         const typ = TYPE_4
@@ -189,10 +189,10 @@ end
 function encode_custom_type(data, bytes::Array{UInt8, 1})
     type_map = Dict()
 
-    type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
+    type_map[String("type")] = String(string(typeof(data)) )
 
     for f in fieldnames(data)
-        type_map[UTF8String(string(f))] = data.(f)
+        type_map[String(string(f))] = data.(f)
     end
 
     encode(type_map, bytes)
