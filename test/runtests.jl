@@ -109,9 +109,9 @@ for (data, bytes) in iana_test_vector
 end
 
 indef_length_coll_test_vectors = Dict(
-    Any[["Hello", " ", "world"], "Hello world", UTF8String] =>
+    Any[["Hello", " ", "world"], "Hello world", String] =>
         hex2bytes("7f6548656c6c6f612065776f726c64ff"),
-    Any["Hello world".data, "Hello world".data, Array{UInt8, 1}] =>
+    Any[Vector{UInt8}("Hello world"), Vector{UInt8}("Hello world"), Array{UInt8, 1}] =>
         hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
     Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
         hex2bytes("9f01fb40026666666666666754776964646c65ff"),
@@ -120,26 +120,26 @@ indef_length_coll_test_vectors = Dict(
 )
 
 coll = []
-function list_producer()
+function list_producer(c::Channel)
     for e in coll
-        produce(e)
+        put!(c, e)
     end
 end
-function map_producer()
+function map_producer(c::Channel)
     for (k, v) in coll
-        produce(k)
-        produce(v)
+        put!(c, k)
+        put!(c, v)
     end
 end
 
 for (data, bytes) in indef_length_coll_test_vectors
     coll = data[1]
-    task =
+    channel =
         if data[3] <: Associative
-            Task(map_producer)
+            Channel(map_producer)
         else
-            Task(list_producer)
+            Channel(list_producer)
         end
-    @test isequal(bytes, encode(Pair(task, data[3])) )
+    @test isequal(bytes, encode(Pair(channel, data[3])) )
     @test isequal(data[2], decode(bytes))
 end
