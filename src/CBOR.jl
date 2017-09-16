@@ -30,12 +30,12 @@ export encode
 export decode, decode_with_iana
 export Simple, Null, Undefined
 
-function decode(cbor_bytes::Array{UInt8, 1})
+function decode(cbor_bytes::Vector{UInt8})
     data, _ = decode_next(1, cbor_bytes, false)
     return data
 end
 
-function decode_with_iana(cbor_bytes::Array{UInt8, 1})
+function decode_with_iana(cbor_bytes::Vector{UInt8})
     warn("Results from decode_with_iana may change in the future.")
     data, _ = decode_next(1, cbor_bytes, true)
     return data

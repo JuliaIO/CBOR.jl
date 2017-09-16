@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 =#
 
-function decode_unsigned(start_idx, bytes::Array{UInt8, 1})
+function decode_unsigned(start_idx, bytes::Vector{UInt8})
     const addntl_info = bytes[start_idx] & ADDNTL_INFO_MASK
 
     if addntl_info < SINGLE_BYTE_UINT_PLUS_ONE
@@ -47,7 +47,7 @@ function decode_unsigned(start_idx, bytes::Array{UInt8, 1})
     return data, byte_len + 1
 end
 
-function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
+function decode_next_indef(start_idx, bytes::Vector{UInt8}, typ::UInt8,
                            with_iana::Bool)
     bytes_consumed = 1
 
@@ -70,7 +70,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             write(buf, sub_utf8_string)
         end
-        const data = takebuf_string(buf)
+        const data = String(take!(buf))
     elseif typ == TYPE_4
         vec = Vector()
         while bytes[start_idx + bytes_consumed] != BREAK_INDEF
@@ -102,7 +102,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
     return data, bytes_consumed
 end
 
-function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
+function decode_next(start_idx, bytes::Vector{UInt8}, with_iana::Bool)
     const first_byte = bytes[start_idx]
     const typ = first_byte & TYPE_BITS_MASK
 
@@ -207,7 +207,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                 decode_unsigned(start_idx, bytes)
             start_idx += bytes_consumed
             const data =
-                UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)])
+                String(bytes[start_idx:(start_idx + string_bytes - 1)])
             bytes_consumed += string_bytes
 
         elseif typ == TYPE_4
