@@ -70,7 +70,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             write(buf, sub_utf8_string)
         end
-        const data = String(take!(buf))
+        const data = (VERSION < v"0.5.0") ? takebuf_string(buf) : String(take!(buf))
     elseif typ == TYPE_4
         vec = Vector()
         while bytes[start_idx + bytes_consumed] != BREAK_INDEF
@@ -206,7 +206,8 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             string_bytes, bytes_consumed =
                 decode_unsigned(start_idx, bytes)
             start_idx += bytes_consumed
-            const data =
+            const data = (VERSION < v"0.5.0") ?
+                UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)]) :
                 String(bytes[start_idx:(start_idx + string_bytes - 1)])
             bytes_consumed += string_bytes
 
