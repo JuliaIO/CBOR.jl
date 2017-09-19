@@ -73,10 +73,16 @@ function encode(byte_string::AbstractVector{UInt8}, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_string)), bytes)
     append!(bytes, byte_string)
 end
-
-function encode(string::Union{UTF8String, ASCIIString}, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-    append!(bytes, string.data)
+if VERSION < v"0.5.0"
+    function encode(string::Union{UTF8String, ASCIIString}, bytes::Array{UInt8, 1})
+        encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
+        append!(bytes, string.data)
+    end
+else
+    function encode(string::String, bytes::Array{UInt8, 1})
+        encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
+        append!(bytes, Vector{UInt8}(string))
+    end
 end
 
 function encode(list::Union{AbstractVector, Tuple}, bytes::Array{UInt8, 1})
@@ -132,13 +138,25 @@ function encode(float::Union{Float64, Float32, Float16}, bytes::Array{UInt8, 1})
     append!(bytes, float_bytes)
 end
 
-function encode(pair::Pair, bytes::Array{UInt8, 1})
-    if typeof(pair.first) <: Integer && pair.first >= 0
-        encode_with_tag(Unsigned(pair.first), pair.second, bytes)
-    elseif typeof(pair.first) == Task
-        encode_indef_length_collection(pair.first, pair.second, bytes)
-    else
-        encode_custom_type(pair, bytes)
+if VERSION < v"0.6.0"
+    function encode(pair::Pair, bytes::Array{UInt8, 1})
+        if typeof(pair.first) <: Integer && pair.first >= 0
+            encode_with_tag(Unsigned(pair.first), pair.second, bytes)
+        elseif typeof(pair.first) == Task
+            encode_indef_length_collection(pair.first, pair.second, bytes)
+        else
+            encode_custom_type(pair, bytes)
+        end
+    end
+else
+    function encode(pair::Pair, bytes::Array{UInt8, 1})
+        if typeof(pair.first) <: Integer && pair.first >= 0
+            encode_with_tag(Unsigned(pair.first), pair.second, bytes)
+        elseif typeof(pair.first) <: Channel
+            encode_indef_length_collection(pair.first, pair.second, bytes)
+        else
+            encode_custom_type(pair, bytes)
+        end
     end
 end
 
@@ -148,33 +166,93 @@ end
 
 # ------- encoding for indefinite length collections
 
-function encode_indef_length_collection(producer::Task, collection_type,
-                                        bytes::Array{UInt8, 1})
-    if collection_type <: AbstractVector{UInt8}
-        const typ = TYPE_2
-    elseif collection_type <: Union{UTF8String, ASCIIString}
-        const typ = TYPE_3
-    elseif collection_type <: Union{AbstractVector, Tuple}
-        const typ = TYPE_4
-    elseif collection_type <: Associative
-        const typ = TYPE_5
-    else
-        error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
+if VERSION < v"0.5.0"
+    function encode_indef_length_collection(producer::Task, collection_type,
+                                            bytes::Array{UInt8, 1})
+        if collection_type <: AbstractVector{UInt8}
+            const typ = TYPE_2
+        elseif collection_type <: Union{UTF8String, ASCIIString}
+            const typ = TYPE_3
+        elseif collection_type <: Union{AbstractVector, Tuple}
+            const typ = TYPE_4
+        elseif collection_type <: Associative
+            const typ = TYPE_5
+        else
+            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
+        end
+
+        push!(bytes, typ | ADDNTL_INFO_INDEF)
+
+        count = 0
+        for e in producer
+            encode(e, bytes)
+            count += 1
+        end
+
+        if typ == TYPE_5 && isodd(count)
+            error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
+        end
+
+        push!(bytes, BREAK_INDEF)
     end
+elseif VERSION < v"0.6.0"
+    function encode_indef_length_collection(producer::Task, collection_type,
+                                            bytes::Array{UInt8, 1})
+        if collection_type <: AbstractVector{UInt8}
+            const typ = TYPE_2
+        elseif collection_type <: String
+            const typ = TYPE_3
+        elseif collection_type <: Union{AbstractVector, Tuple}
+            const typ = TYPE_4
+        elseif collection_type <: Associative
+            const typ = TYPE_5
+        else
+            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
+        end
 
-    push!(bytes, typ | ADDNTL_INFO_INDEF)
+        push!(bytes, typ | ADDNTL_INFO_INDEF)
 
-    count = 0
-    for e in producer
-        encode(e, bytes)
-        count += 1
+        count = 0
+        for e in producer
+            encode(e, bytes)
+            count += 1
+        end
+
+        if typ == TYPE_5 && isodd(count)
+            error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
+        end
+
+        push!(bytes, BREAK_INDEF)
     end
+else
+    function encode_indef_length_collection(producer::Channel, collection_type,
+                                            bytes::Array{UInt8, 1})
+        if collection_type <: AbstractVector{UInt8}
+            const typ = TYPE_2
+        elseif collection_type <: String
+            const typ = TYPE_3
+        elseif collection_type <: Union{AbstractVector, Tuple}
+            const typ = TYPE_4
+        elseif collection_type <: Associative
+            const typ = TYPE_5
+        else
+            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
+        end
 
-    if typ == TYPE_5 && isodd(count)
-        error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
+        push!(bytes, typ | ADDNTL_INFO_INDEF)
+
+        count = 0
+        for e in producer
+            encode(e, bytes)
+            count += 1
+        end
+
+        if typ == TYPE_5 && isodd(count)
+            error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
+        end
+
+        push!(bytes, BREAK_INDEF)
     end
-
-    push!(bytes, BREAK_INDEF)
 end
 
 # ------- encoding with tags
@@ -186,17 +264,32 @@ end
 
 # ------- encoding for user-defined types
 
-function encode_custom_type(data, bytes::Array{UInt8, 1})
-    type_map = Dict()
+if VERSION < v"0.5.0"
+    function encode_custom_type(data, bytes::Array{UInt8, 1})
+        type_map = Dict()
 
-    type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
+        type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
 
-    for f in fieldnames(data)
-        type_map[UTF8String(string(f))] = data.(f)
+        for f in fieldnames(data)
+            type_map[UTF8String(string(f))] = data.(f)
+        end
+
+        encode(type_map, bytes)
     end
+else
+    function encode_custom_type(data, bytes::Array{UInt8, 1})
+        type_map = Dict()
 
-    encode(type_map, bytes)
+        type_map[String("type")] = String(string(typeof(data)) )
+
+        for f in fieldnames(data)
+            type_map[String(string(f))] = data.(f)
+        end
+
+        encode(type_map, bytes)
+    end
 end
+
 
 # ------- encoding for Simple types
 

@@ -72,7 +72,7 @@ An `AbstractVector{UInt8}` is encoded as CBOR `Type 2`
 
 #### Strings
 
-`UTF8String` and `ASCIIString` are encoded as CBOR `Type 3`
+`String` are encoded as CBOR `Type 3`
 
 ```julia
 > encode("Valar morghulis")
@@ -156,7 +156,7 @@ To *tag* one of the above types, encode a `Pair` with `first` being an
 ```
 
 There exists an [IANA registery](http://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml)
-which assigns certain meanings to tags; for example, a UTF8 string tagged
+which assigns certain meanings to tags; for example, a string tagged
 with a value of `32` is to be interpreted as a
 [Uniform Resource Locater](https://tools.ietf.org/html/rfc3986). To decode a
 tagged CBOR data item, and then to automatically interpret the meaning of the
@@ -203,7 +203,7 @@ For example, say you have a user-defined type `Point`
 type Point
     x::Int64
     y::Float64
-    space::UTF8String
+    space::String
 end
 
 point = Point(1, 3.4, "Euclidean")
@@ -230,20 +230,20 @@ To encode collections of *indefinite* length, first create a *producer*
 function
 
 ```julia
-function producer()
+function producer(ch::Channel)
     for i in 1:10
-        produce(i*i)
+        put!(ch,i*i)
     end
 end
 ```
 
-Wrap it in a `Task`
+Wrap it in a `Channel`
 
 ```julia
-task = Task(producer)
+task = Channel(producer)
 ```
 
-Encode a `Pair` with `first` being the `Task` just created, and `second` being
+Encode a `Pair` with `first` being the `Channel` just created, and `second` being
 a valid collection type you want to encode.
 
 ```julia
@@ -258,14 +258,14 @@ While encoding an indefinite length `Map`, produce first the key and then the
 value for each key-value pair.
 
 ```julia
-function cubes()
+function cubes(ch::Channel)
     for i in 1:10
-        produce(i)       # key
-        produce(i*i*i)   # value
+        put!(ch,i)       # key
+        put!(ch,i*i*i)   # value
     end
 end
 
-> bytes = encode(Pair(Task(cubes), Associative))
+> bytes = encode(Pair(Channel(cubes), Associative))
 34-element Array{UInt8, 1}: 0xbf 0x01 0x01 0x02 0x08 ... 0x0a 0x19 0x03 0xe8 0xff
 
 > decode(bytes)
@@ -286,13 +286,13 @@ Note that when an indefinite length CBOR `Type 2` or `Type 3` is decoded,
 the result is a *concatenation* of the individual elements.
 
 ```julia
-function producer()
+function producer(ch::Channel)
     for c in ["F", "ire", " ", "and", " ", "Blo", "od"]
-        produce(c)
+        put!(ch,c)
     end
 end
 
-> bytes = encode(Pair(Task(producer), UTF8String))
+> bytes = encode(Pair(Channel(producer), String))
 23-element Array{UInt8, 1}: 0x7f 0x61 0x46 0x63 0x69 ... 0x6f 0x62 0x6f 0x64 0xff
 
 > decode(bytes)
