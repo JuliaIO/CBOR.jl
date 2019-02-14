@@ -21,22 +21,22 @@ THE SOFTWARE.
 =#
 
 function decode_unsigned(start_idx, bytes::Array{UInt8, 1})
-    const addntl_info = bytes[start_idx] & ADDNTL_INFO_MASK
+    addntl_info = bytes[start_idx] & ADDNTL_INFO_MASK
 
     if addntl_info < SINGLE_BYTE_UINT_PLUS_ONE
         return addntl_info, sizeof(UInt8)
     elseif addntl_info == ADDNTL_INFO_UINT8
-        const data = zero(UInt8)
-        const byte_len = sizeof(UInt8)
+        data = zero(UInt8)
+        byte_len = sizeof(UInt8)
     elseif addntl_info == ADDNTL_INFO_UINT16
-        const data = zero(UInt16)
-        const byte_len = sizeof(UInt16)
+        data = zero(UInt16)
+        byte_len = sizeof(UInt16)
     elseif addntl_info == ADDNTL_INFO_UINT32
-        const data = zero(UInt32)
-        const byte_len = sizeof(UInt32)
+        data = zero(UInt32)
+        byte_len = sizeof(UInt32)
     elseif addntl_info == ADDNTL_INFO_UINT64
-        const data = zero(UInt64)
-        const byte_len = sizeof(UInt64)
+        data = zero(UInt64)
+        byte_len = sizeof(UInt64)
     end
 
     for i in 1:byte_len
@@ -60,7 +60,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             push!(byte_string, sub_byte_string)
         end
-        const data = byte_string
+        data = byte_string
     elseif typ == TYPE_3
         buf = IOBuffer()
         while bytes[start_idx + bytes_consumed] != BREAK_INDEF
@@ -70,7 +70,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             write(buf, sub_utf8_string)
         end
-        const data = (VERSION < v"0.5.0") ? takebuf_string(buf) : String(take!(buf))
+        data = (VERSION < v"0.5.0") ? takebuf_string(buf) : String(take!(buf))
     elseif typ == TYPE_4
         vec = Vector()
         while bytes[start_idx + bytes_consumed] != BREAK_INDEF
@@ -80,7 +80,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             push!(vec, item)
         end
-        const data = vec
+        data = vec
     elseif typ == TYPE_5
         dict = Dict()
         while bytes[start_idx + bytes_consumed] != BREAK_INDEF
@@ -94,7 +94,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             dict[key] = value
         end
-        const data = dict
+        data = dict
     end
 
     bytes_consumed += 1
@@ -103,8 +103,8 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
-    const first_byte = bytes[start_idx]
-    const typ = first_byte & TYPE_BITS_MASK
+    first_byte = bytes[start_idx]
+    typ = first_byte & TYPE_BITS_MASK
 
         if typ == TYPE_0
             data, bytes_consumed = decode_unsigned(start_idx, bytes)
@@ -142,49 +142,49 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                         big_int = -(big_int + 1)
                     end
 
-                    const data = big_int
+                    data = big_int
                 else
-                    const data = retrieve_plain_pair()
+                    data = retrieve_plain_pair()
                 end
             else
-                const data = retrieve_plain_pair()
+                data = retrieve_plain_pair()
             end
 
         elseif typ == TYPE_7
-            const addntl_info = first_byte & ADDNTL_INFO_MASK
+            addntl_info = first_byte & ADDNTL_INFO_MASK
             bytes_consumed = 1
 
             if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
                 bytes_consumed += 1
                 if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE
-                    const simple_val = addntl_info
+                    simple_val = addntl_info
                 else
                     bytes_consumed += 1
-                    const simple_val = bytes[start_idx + 1]
+                    simple_val = bytes[start_idx + 1]
                 end
 
                 if simple_val == SIMPLE_FALSE
-                    const data = false
+                    data = false
                 elseif simple_val == SIMPLE_TRUE
-                    const data = true
+                    data = true
                 elseif simple_val == SIMPLE_NULL
-                    const data = Null()
+                    data = Null()
                 elseif simple_val == SIMPLE_UNDEF
-                    const data = Undefined()
+                    data = Undefined()
                 else
-                    const data = Simple(simple_val)
+                    data = Simple(simple_val)
                 end
             else
                 if addntl_info == ADDNTL_INFO_FLOAT64
-                    const float_byte_len = SIZE_OF_FLOAT64
+                    float_byte_len = SIZE_OF_FLOAT64
                 elseif addntl_info == ADDNTL_INFO_FLOAT32
-                    const float_byte_len = SIZE_OF_FLOAT32
+                    float_byte_len = SIZE_OF_FLOAT32
                 elseif addntl_info == ADDNTL_INFO_FLOAT16
                     error("Decoding 16-bit floats isn't supported.")
                 end
 
                 bytes_consumed += float_byte_len
-                const data = hex2num(bytes2hex(
+                data = hex2num(bytes2hex(
                     bytes[(start_idx + 1):(start_idx + float_byte_len)]
                 ))
             end
@@ -198,7 +198,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                 decode_unsigned(start_idx, bytes)
             start_idx += bytes_consumed
 
-            const data =
+            data =
                 bytes[start_idx:(start_idx + byte_string_len - 1)]
             bytes_consumed += byte_string_len
 
@@ -206,7 +206,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             string_bytes, bytes_consumed =
                 decode_unsigned(start_idx, bytes)
             start_idx += bytes_consumed
-            const data = (VERSION < v"0.5.0") ?
+            data = (VERSION < v"0.5.0") ?
                 UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)]) :
                 String(bytes[start_idx:(start_idx + string_bytes - 1)])
             bytes_consumed += string_bytes
