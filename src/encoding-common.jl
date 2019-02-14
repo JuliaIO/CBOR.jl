@@ -20,7 +20,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 =#
 
-VERSION ≥ v"0.7" && using Printf
+using Printf
 
 function encode_unsigned_with_type(type_bits::UInt8,
                                    num::Unsigned,
@@ -75,16 +75,9 @@ function encode(byte_string::AbstractVector{UInt8}, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_string)), bytes)
     append!(bytes, byte_string)
 end
-if VERSION < v"0.5.0"
-    function encode(string::Union{UTF8String, ASCIIString}, bytes::Array{UInt8, 1})
-        encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-        append!(bytes, string.data)
-    end
-else
-    function encode(string::String, bytes::Array{UInt8, 1})
-        encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-        append!(bytes, Vector{UInt8}(string))
-    end
+function encode(string::String, bytes::Array{UInt8, 1})
+    encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
+    append!(bytes, Vector{UInt8}(undef,string))
 end
 
 function encode(list::Union{AbstractVector, Tuple}, bytes::Array{UInt8, 1})
@@ -94,8 +87,7 @@ function encode(list::Union{AbstractVector, Tuple}, bytes::Array{UInt8, 1})
     end
 end
 
-const map_type = VERSION ≥ v"0.7" ? AbstractDict : Associative
-function encode(map::map_type, bytes::Array{UInt8, 1})
+function encode(map::AbstractDict, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_5, Unsigned(length(map)), bytes)
     for (key, value) in map
         encode(key, bytes)
@@ -105,10 +97,10 @@ end
 
 function encode(big_int::BigInt, bytes::Array{UInt8, 1})
     if big_int < 0
-        hex_str = hex(-big_int - 1)
+        hex_str = string(-big_int - 1,base=16)
         tag = NEG_BIG_INT_TAG
     else
-        hex_str = hex(big_int)
+        hex_str = string(big_int,base=16)
         tag = POS_BIG_INT_TAG
     end
 
@@ -123,9 +115,10 @@ end
 
 function encode(float::Union{Float64, Float32, Float16}, bytes::Array{UInt8, 1})
     if typeof(float) == Float64 && float == Float32(float)
-        float_bytes = hex2bytes(num2hex(Float32(float)) )
+        x = Float32(float)
+        float_bytes = hex2bytes(string(reinterpret(Unsigned,x),base=16,pad=sizeof(x)*2) )
     else
-        float_bytes = hex2bytes(num2hex(float))
+        float_bytes = hex2bytes(string(reinterpret(Unsigned,float),base=16,pad=sizeof(float)*2))
     end
     float_bytes_len = length(float_bytes)
 
@@ -135,31 +128,19 @@ function encode(float::Union{Float64, Float32, Float16}, bytes::Array{UInt8, 1})
         push!(bytes, TYPE_7 | ADDNTL_INFO_FLOAT32)
     else float_bytes_len == SIZE_OF_FLOAT16
         push!(bytes, TYPE_7 | ADDNTL_INFO_FLOAT16)
-        warn("Decoding of 16-bit float is not supported.")
+        @warn("Decoding of 16-bit float is not supported.")
     end
 
     append!(bytes, float_bytes)
 end
 
-if VERSION < v"0.6.0"
-    function encode(pair::Pair, bytes::Array{UInt8, 1})
-        if typeof(pair.first) <: Integer && pair.first >= 0
-            encode_with_tag(Unsigned(pair.first), pair.second, bytes)
-        elseif typeof(pair.first) == Task
-            encode_indef_length_collection(pair.first, pair.second, bytes)
-        else
-            encode_custom_type(pair, bytes)
-        end
-    end
-else
-    function encode(pair::Pair, bytes::Array{UInt8, 1})
-        if typeof(pair.first) <: Integer && pair.first >= 0
-            encode_with_tag(Unsigned(pair.first), pair.second, bytes)
-        elseif typeof(pair.first) <: Channel
-            encode_indef_length_collection(pair.first, pair.second, bytes)
-        else
-            encode_custom_type(pair, bytes)
-        end
+function encode(pair::Pair, bytes::Array{UInt8, 1})
+    if typeof(pair.first) <: Integer && pair.first >= 0
+        encode_with_tag(Unsigned(pair.first), pair.second, bytes)
+    elseif typeof(pair.first) <: Channel
+        encode_indef_length_collection(pair.first, pair.second, bytes)
+    else
+        encode_custom_type(pair, bytes)
     end
 end
 
@@ -169,93 +150,33 @@ end
 
 # ------- encoding for indefinite length collections
 
-if VERSION < v"0.5.0"
-    function encode_indef_length_collection(producer::Task, collection_type,
-                                            bytes::Array{UInt8, 1})
-        if collection_type <: AbstractVector{UInt8}
-            typ = TYPE_2
-        elseif collection_type <: Union{UTF8String, ASCIIString}
-            typ = TYPE_3
-        elseif collection_type <: Union{AbstractVector, Tuple}
-            typ = TYPE_4
-        elseif collection_type <: Associative
-            typ = TYPE_5
-        else
-            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
-        end
-
-        push!(bytes, typ | ADDNTL_INFO_INDEF)
-
-        count = 0
-        for e in producer
-            encode(e, bytes)
-            count += 1
-        end
-
-        if typ == TYPE_5 && isodd(count)
-            error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
-        end
-
-        push!(bytes, BREAK_INDEF)
+function encode_indef_length_collection(producer::Channel, collection_type,
+                                        bytes::Array{UInt8, 1})
+    if collection_type <: AbstractVector{UInt8}
+        typ = TYPE_2
+    elseif collection_type <: String
+        typ = TYPE_3
+    elseif collection_type <: Union{AbstractVector, Tuple}
+        typ = TYPE_4
+    elseif collection_type <: AbstractDict
+        typ = TYPE_5
+    else
+        error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
     end
-elseif VERSION < v"0.6.0"
-    function encode_indef_length_collection(producer::Task, collection_type,
-                                            bytes::Array{UInt8, 1})
-        if collection_type <: AbstractVector{UInt8}
-            typ = TYPE_2
-        elseif collection_type <: String
-            typ = TYPE_3
-        elseif collection_type <: Union{AbstractVector, Tuple}
-            typ = TYPE_4
-        elseif collection_type <: Associative
-            typ = TYPE_5
-        else
-            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
-        end
 
-        push!(bytes, typ | ADDNTL_INFO_INDEF)
+    push!(bytes, typ | ADDNTL_INFO_INDEF)
 
-        count = 0
-        for e in producer
-            encode(e, bytes)
-            count += 1
-        end
-
-        if typ == TYPE_5 && isodd(count)
-            error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
-        end
-
-        push!(bytes, BREAK_INDEF)
+    count = 0
+    for e in producer
+        encode(e, bytes)
+        count += 1
     end
-else
-    function encode_indef_length_collection(producer::Channel, collection_type,
-                                            bytes::Array{UInt8, 1})
-        if collection_type <: AbstractVector{UInt8}
-            typ = TYPE_2
-        elseif collection_type <: String
-            typ = TYPE_3
-        elseif collection_type <: Union{AbstractVector, Tuple}
-            typ = TYPE_4
-        elseif collection_type <: Associative
-            typ = TYPE_5
-        else
-            error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
-        end
 
-        push!(bytes, typ | ADDNTL_INFO_INDEF)
-
-        count = 0
-        for e in producer
-            encode(e, bytes)
-            count += 1
-        end
-
-        if typ == TYPE_5 && isodd(count)
-            error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
-        end
-
-        push!(bytes, BREAK_INDEF)
+    if typ == TYPE_5 && isodd(count)
+        error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
     end
+
+    push!(bytes, BREAK_INDEF)
 end
 
 # ------- encoding with tags
@@ -267,30 +188,16 @@ end
 
 # ------- encoding for user-defined types
 
-if VERSION < v"0.5.0"
-    function encode_custom_type(data, bytes::Array{UInt8, 1})
-        type_map = Dict()
+function encode_custom_type(data, bytes::Array{UInt8, 1})
+    type_map = Dict()
 
-        type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
+    type_map[String("type")] = String(string(typeof(data)) )
 
-        for f in fieldnames(data)
-            type_map[UTF8String(string(f))] = data.(f)
-        end
-
-        encode(type_map, bytes)
+    for f in fieldnames(data)
+        type_map[String(string(f))] = data.(f)
     end
-else
-    function encode_custom_type(data, bytes::Array{UInt8, 1})
-        type_map = Dict()
 
-        type_map[String("type")] = String(string(typeof(data)) )
-
-        for f in fieldnames(data)
-            type_map[String(string(f))] = data.(f)
-        end
-
-        encode(type_map, bytes)
-    end
+    encode(type_map, bytes)
 end
 
 

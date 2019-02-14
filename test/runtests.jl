@@ -1,6 +1,4 @@
-include("../src/CBOR.jl")
-
-using Base.Test
+using Test
 using CBOR
 using DataStructures
 
@@ -108,64 +106,37 @@ for (data, bytes) in iana_test_vector
     @test isequal(data, decode_with_iana(bytes))
 end
 
-if VERSION < v"0.5.0"
-    indef_length_coll_test_vectors = Dict(
-        Any[["Hello", " ", "world"], "Hello world", UTF8String] =>
-            hex2bytes("7f6548656c6c6f612065776f726c64ff"),
-        Any["Hello world".data, "Hello world".data, Array{UInt8, 1}] =>
-            hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
-        Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
-            hex2bytes("9f01fb40026666666666666754776964646c65ff"),
-        Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
-            Associative] => hex2bytes("bf0102fb400999999999999a63332e32ff")
-    )
-else
-    indef_length_coll_test_vectors = Dict(
-        Any[["Hello", " ", "world"], "Hello world", String] =>
-            hex2bytes("7f6548656c6c6f612065776f726c64ff"),
-        Any[Vector{UInt8}("Hello world"), Vector{UInt8}("Hello world"), Array{UInt8, 1}] =>
-            hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
-        Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
-            hex2bytes("9f01fb40026666666666666754776964646c65ff"),
-        Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
-            Associative] => hex2bytes("bf0102fb400999999999999a63332e32ff")
-    )
-end
+indef_length_coll_test_vectors = Dict(
+    Any[["Hello", " ", "world"], "Hello world", String] =>
+        hex2bytes("7f6548656c6c6f612065776f726c64ff"),
+    Any[Vector{UInt8}("Hello world"), Vector{UInt8}("Hello world"), Array{UInt8, 1}] =>
+        hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
+    Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
+        hex2bytes("9f01fb40026666666666666754776964646c65ff"),
+    Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
+        AbstractDict] => hex2bytes("bf0102fb400999999999999a63332e32ff")
+)
 
 coll = []
-if VERSION < v"0.6.0"
-    function list_producer()
-        for e in coll
-            produce(e)
-        end
+function list_producer(c::Channel)
+    for e in coll
+        put!(c::Channel,e)
     end
-    function map_producer()
-        for (k, v) in coll
-            produce(k)
-            produce(v)
-        end
-    end
-else
-    function list_producer(c::Channel)
-        for e in coll
-            put!(c::Channel,e)
-        end
-    end
-    function map_producer(c::Channel)
-        for (k, v) in coll
-            put!(c::Channel,k)
-            put!(c::Channel,v)
-        end
+end
+function map_producer(c::Channel)
+    for (k, v) in coll
+        put!(c::Channel,k)
+        put!(c::Channel,v)
     end
 end
 
 for (data, bytes) in indef_length_coll_test_vectors
-    coll = data[1]
+    global coll = data[1]
     task =
-        if data[3] <: Associative
-            (VERSION < v"0.6.0") ? Task(map_producer) : Channel(map_producer)
+        if data[3] <: AbstractDict
+            Channel(map_producer)
         else
-            (VERSION < v"0.6.0") ? Task(list_producer) : Channel(list_producer)
+            Channel(list_producer)
         end
     @test isequal(bytes, encode(Pair(task, data[3])) )
     @test isequal(data[2], decode(bytes))

@@ -70,7 +70,7 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 
             write(buf, sub_utf8_string)
         end
-        data = (VERSION < v"0.5.0") ? takebuf_string(buf) : String(take!(buf))
+        data = String(take!(buf))
     elseif typ == TYPE_4
         vec = Vector()
         while bytes[start_idx + bytes_consumed] != BREAK_INDEF
@@ -137,7 +137,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                     bytes_consumed += sub_bytes_consumed
 
                     big_int = parse(BigInt, bytes2hex(big_int_bytes),
-                                    HEX_BASE)
+                                    base=HEX_BASE)
                     if tag == NEG_BIG_INT_TAG
                         big_int = -(big_int + 1)
                     end
@@ -184,9 +184,9 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                 end
 
                 bytes_consumed += float_byte_len
-                data = hex2num(bytes2hex(
+                data = reinterpret(Float64,parse(UInt64,bytes2hex(
                     bytes[(start_idx + 1):(start_idx + float_byte_len)]
-                ))
+                   ),base=16))
             end
 
         elseif first_byte & ADDNTL_INFO_MASK == ADDNTL_INFO_INDEF
@@ -206,14 +206,12 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             string_bytes, bytes_consumed =
                 decode_unsigned(start_idx, bytes)
             start_idx += bytes_consumed
-            data = (VERSION < v"0.5.0") ?
-                UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)]) :
-                String(bytes[start_idx:(start_idx + string_bytes - 1)])
+            data = String(bytes[start_idx:(start_idx + string_bytes - 1)])
             bytes_consumed += string_bytes
 
         elseif typ == TYPE_4
             vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-            data = Vector(vec_len)
+            data = Vector(undef,vec_len)
             for i in 1:vec_len
                 data[i], sub_bytes_consumed =
                     decode_next(start_idx + bytes_consumed, bytes, with_iana)
