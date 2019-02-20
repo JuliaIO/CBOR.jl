@@ -24,20 +24,20 @@ function encode_unsigned_with_type(type_bits::UInt8,
                                    num::Unsigned,
                                    bytes::Array{UInt8, 1})
     if num < SINGLE_BYTE_UINT_PLUS_ONE
-        const byte_len = 0
-        const addntl_info = num
+        byte_len = 0
+        addntl_info = num
     elseif num < UINT8_MAX_PLUS_ONE
-        const byte_len = sizeof(UInt8)
-        const addntl_info = ADDNTL_INFO_UINT8
+        byte_len = sizeof(UInt8)
+        addntl_info = ADDNTL_INFO_UINT8
     elseif num < UINT16_MAX_PLUS_ONE
-        const byte_len = sizeof(UInt16)
-        const addntl_info = ADDNTL_INFO_UINT16
+        byte_len = sizeof(UInt16)
+        addntl_info = ADDNTL_INFO_UINT16
     elseif num < UINT32_MAX_PLUS_ONE
-        const byte_len = sizeof(UInt32)
-        const addntl_info = ADDNTL_INFO_UINT32
+        byte_len = sizeof(UInt32)
+        addntl_info = ADDNTL_INFO_UINT32
     elseif num < UINT64_MAX_PLUS_ONE
-        const byte_len = sizeof(UInt64)
-        const addntl_info = ADDNTL_INFO_UINT64
+        byte_len = sizeof(UInt64)
+        addntl_info = ADDNTL_INFO_UINT64
     else
         error("128-bits ints can't be encoded in the CBOR format.")
     end
@@ -102,11 +102,11 @@ end
 
 function encode(big_int::BigInt, bytes::Array{UInt8, 1})
     if big_int < 0
-        const hex_str = hex(-big_int - 1)
-        const tag = NEG_BIG_INT_TAG
+        hex_str = hex(-big_int - 1)
+        tag = NEG_BIG_INT_TAG
     else
-        const hex_str = hex(big_int)
-        const tag = POS_BIG_INT_TAG
+        hex_str = hex(big_int)
+        tag = POS_BIG_INT_TAG
     end
 
     encode_unsigned_with_type(TYPE_6, Unsigned(tag), bytes)
@@ -120,11 +120,11 @@ end
 
 function encode(float::Union{Float64, Float32, Float16}, bytes::Array{UInt8, 1})
     if typeof(float) == Float64 && float == Float32(float)
-        const float_bytes = hex2bytes(num2hex(Float32(float)) )
+        float_bytes = hex2bytes(num2hex(Float32(float)) )
     else
-        const float_bytes = hex2bytes(num2hex(float))
+        float_bytes = hex2bytes(num2hex(float))
     end
-    const float_bytes_len = length(float_bytes)
+    float_bytes_len = length(float_bytes)
 
     if float_bytes_len == SIZE_OF_FLOAT64
         push!(bytes, TYPE_7 | ADDNTL_INFO_FLOAT64)
@@ -170,13 +170,13 @@ if VERSION < v"0.5.0"
     function encode_indef_length_collection(producer::Task, collection_type,
                                             bytes::Array{UInt8, 1})
         if collection_type <: AbstractVector{UInt8}
-            const typ = TYPE_2
+            typ = TYPE_2
         elseif collection_type <: Union{UTF8String, ASCIIString}
-            const typ = TYPE_3
+            typ = TYPE_3
         elseif collection_type <: Union{AbstractVector, Tuple}
-            const typ = TYPE_4
+            typ = TYPE_4
         elseif collection_type <: Associative
-            const typ = TYPE_5
+            typ = TYPE_5
         else
             error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
         end
@@ -199,13 +199,13 @@ elseif VERSION < v"0.6.0"
     function encode_indef_length_collection(producer::Task, collection_type,
                                             bytes::Array{UInt8, 1})
         if collection_type <: AbstractVector{UInt8}
-            const typ = TYPE_2
+            typ = TYPE_2
         elseif collection_type <: String
-            const typ = TYPE_3
+            typ = TYPE_3
         elseif collection_type <: Union{AbstractVector, Tuple}
-            const typ = TYPE_4
+            typ = TYPE_4
         elseif collection_type <: Associative
-            const typ = TYPE_5
+            typ = TYPE_5
         else
             error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
         end
@@ -228,13 +228,13 @@ else
     function encode_indef_length_collection(producer::Channel, collection_type,
                                             bytes::Array{UInt8, 1})
         if collection_type <: AbstractVector{UInt8}
-            const typ = TYPE_2
+            typ = TYPE_2
         elseif collection_type <: String
-            const typ = TYPE_3
+            typ = TYPE_3
         elseif collection_type <: Union{AbstractVector, Tuple}
-            const typ = TYPE_4
+            typ = TYPE_4
         elseif collection_type <: Associative
-            const typ = TYPE_5
+            typ = TYPE_5
         else
             error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
         end
