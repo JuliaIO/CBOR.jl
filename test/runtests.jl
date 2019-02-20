@@ -1,12 +1,10 @@
-include("../src/CBOR.jl")
-
-using Base.Test
+using Test
 using CBOR
 using DataStructures
 
 # Taken (and modified) from Appendix A of RFC 7049
 
-two_way_test_vectors = Dict(
+two_way_test_vectors = [
     0 => hex2bytes("00"),
     1 => hex2bytes("01"),
     10 => hex2bytes("0a"),
@@ -78,95 +76,77 @@ two_way_test_vectors = Dict(
         hex2bytes("a56161614161626142616361436164614461656145"),
 
     ["a", Dict("b"=>"c")] => hex2bytes("826161a161626163")
-)
+]
 
-for (data, bytes) in two_way_test_vectors
-    @test isequal(bytes, encode(data))
-    @test isequal(data, decode(bytes))
+@testset "two way" begin
+    for (data, bytes) in two_way_test_vectors
+        @test isequal(bytes, encode(data))
+        @test isequal(data, decode(bytes))
+    end
 end
 
-bytes_to_data_test_vectors = Dict(
+
+bytes_to_data_test_vectors = [
     hex2bytes("fa7fc00000") => NaN32,
     hex2bytes("fa7f800000") => Inf32,
     hex2bytes("faff800000") => -Inf32,
     hex2bytes("fb7ff8000000000000") => NaN,
     hex2bytes("fb7ff0000000000000") => Inf,
     hex2bytes("fbfff0000000000000") => -Inf
-)
+]
 
-for (bytes, data) in bytes_to_data_test_vectors
-    @test isequal(data, decode(bytes))
+@testset "bytes to data" begin
+    for (bytes, data) in bytes_to_data_test_vectors
+        @test isequal(data, decode(bytes))
+    end
 end
 
-iana_test_vector = Dict(
+iana_test_vector = [
     BigInt(18446744073709551616) => hex2bytes("c249010000000000000000"),
     BigInt(-18446744073709551617) => hex2bytes("c349010000000000000000")
-)
+]
 
-for (data, bytes) in iana_test_vector
-    @test isequal(bytes, encode(data))
-    @test isequal(data, decode_with_iana(bytes))
+@testset "BigInt iana" begin
+    for (data, bytes) in iana_test_vector
+        @test isequal(bytes, encode(data))
+        @test isequal(data, decode_with_iana(bytes))
+    end
 end
 
-if VERSION < v"0.5.0"
-    indef_length_coll_test_vectors = Dict(
-        Any[["Hello", " ", "world"], "Hello world", UTF8String] =>
-            hex2bytes("7f6548656c6c6f612065776f726c64ff"),
-        Any["Hello world".data, "Hello world".data, Array{UInt8, 1}] =>
-            hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
-        Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
-            hex2bytes("9f01fb40026666666666666754776964646c65ff"),
-        Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
-            Associative] => hex2bytes("bf0102fb400999999999999a63332e32ff")
-    )
-else
-    indef_length_coll_test_vectors = Dict(
-        Any[["Hello", " ", "world"], "Hello world", String] =>
-            hex2bytes("7f6548656c6c6f612065776f726c64ff"),
-        Any[Vector{UInt8}("Hello world"), Vector{UInt8}("Hello world"), Array{UInt8, 1}] =>
-            hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
-        Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
-            hex2bytes("9f01fb40026666666666666754776964646c65ff"),
-        Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
-            Associative] => hex2bytes("bf0102fb400999999999999a63332e32ff")
-    )
-end
+indef_length_coll_test_vectors = [
+    Any[["Hello", " ", "world"], "Hello world", String] =>
+        hex2bytes("7f6548656c6c6f612065776f726c64ff"),
+    Any[b"Hello world", b"Hello world", Array{UInt8, 1}] =>
+        hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
+    Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
+        hex2bytes("9f01fb40026666666666666754776964646c65ff"),
+    Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
+        AbstractDict] => hex2bytes("bf0102fb400999999999999a63332e32ff")
+]
 
 coll = []
-if VERSION < v"0.6.0"
-    function list_producer()
-        for e in coll
-            produce(e)
-        end
-    end
-    function map_producer()
-        for (k, v) in coll
-            produce(k)
-            produce(v)
-        end
-    end
-else
-    function list_producer(c::Channel)
-        for e in coll
-            put!(c::Channel,e)
-        end
-    end
-    function map_producer(c::Channel)
-        for (k, v) in coll
-            put!(c::Channel,k)
-            put!(c::Channel,v)
-        end
+
+function list_producer(c::Channel)
+    for e in coll
+        put!(c::Channel,e)
     end
 end
-
-for (data, bytes) in indef_length_coll_test_vectors
-    coll = data[1]
-    task =
-        if data[3] <: Associative
-            (VERSION < v"0.6.0") ? Task(map_producer) : Channel(map_producer)
+function map_producer(c::Channel)
+    for (k, v) in coll
+        put!(c::Channel,k)
+        put!(c::Channel,v)
+    end
+end
+@testset "ifndef length collections" begin
+    for (data, bytes) in indef_length_coll_test_vectors
+        global coll
+        coll = data[1]
+        task = if data[3] <: AbstractDict
+            Channel(map_producer)
         else
-            (VERSION < v"0.6.0") ? Task(list_producer) : Channel(list_producer)
+            Channel(list_producer)
         end
-    @test isequal(bytes, encode(Pair(task, data[3])) )
-    @test isequal(data[2], decode(bytes))
+        @test isequal(bytes, encode(Pair(task, data[3])))
+        @test isequal(data[2], decode(bytes))
+    end
 end

@@ -22,6 +22,13 @@ THE SOFTWARE.
 
 module CBOR
 
+using Printf
+
+num2hex(n) = string(n, base = 16, pad = sizeof(n) * 2)
+num2hex(n::AbstractFloat) = num2hex(reinterpret(Unsigned, n))
+hex2num(s) = reinterpret(Float64, parse(UInt64, s, base = 16))
+hex(n) = string(n, base = 16)
+
 include("constants.jl")
 include("encoding-common.jl")
 include("decoding-common.jl")
@@ -36,7 +43,7 @@ function decode(cbor_bytes::Array{UInt8, 1})
 end
 
 function decode_with_iana(cbor_bytes::Array{UInt8, 1})
-    warn("Results from decode_with_iana may change in the future.")
+    @warn("Results from decode_with_iana may change in the future.")
     data, _ = decode_next(1, cbor_bytes, true)
     return data
 end

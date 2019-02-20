@@ -127,7 +127,7 @@ are encoded as CBOR `Type 4`
 
 #### Maps
 
-An `Associative` type is encoded as CBOR `Type 5`
+An `AbstractDict` type is encoded as CBOR `Type 5`
 
 ```julia
 > d = Dict()
@@ -265,7 +265,7 @@ function cubes(ch::Channel)
     end
 end
 
-> bytes = encode(Pair(Channel(cubes), Associative))
+> bytes = encode(Pair(Channel(cubes), AbstractDict))
 34-element Array{UInt8, 1}: 0xbf 0x01 0x01 0x02 0x08 ... 0x0a 0x19 0x03 0xe8 0xff
 
 > decode(bytes)

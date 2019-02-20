@@ -106,135 +106,140 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
     first_byte = bytes[start_idx]
     typ = first_byte & TYPE_BITS_MASK
 
-        if typ == TYPE_0
-            data, bytes_consumed = decode_unsigned(start_idx, bytes)
+    if typ == TYPE_0
+        data, bytes_consumed = decode_unsigned(start_idx, bytes)
 
-        elseif typ == TYPE_1
-            data, bytes_consumed = decode_unsigned(start_idx, bytes)
-            if (i = Int128(data) + 1) > typemax(Int64)
-                data = -i
-            else
-                data = -(Signed(data) + 1)
-            end
+    elseif typ == TYPE_1
+        data, bytes_consumed = decode_unsigned(start_idx, bytes)
+        if (i = Int128(data) + 1) > typemax(Int64)
+            data = -i
+        else
+            data = -(Signed(data) + 1)
+        end
 
-        elseif typ == TYPE_6
-            tag, bytes_consumed = decode_unsigned(start_idx, bytes)
+    elseif typ == TYPE_6
+        tag, bytes_consumed = decode_unsigned(start_idx, bytes)
 
-            function retrieve_plain_pair()
-                tagged_data, data_bytes =
+        function retrieve_plain_pair()
+            tagged_data, data_bytes =
+                decode_next(start_idx + bytes_consumed, bytes,
+                            with_iana)
+            bytes_consumed += data_bytes
+
+            return Pair(tag, tagged_data)
+        end
+
+        if with_iana
+            if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
+                big_int_bytes, sub_bytes_consumed =
                     decode_next(start_idx + bytes_consumed, bytes,
                                 with_iana)
-                bytes_consumed += data_bytes
+                bytes_consumed += sub_bytes_consumed
 
-                return Pair(tag, tagged_data)
-            end
-
-            if with_iana
-                if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
-                    big_int_bytes, sub_bytes_consumed =
-                        decode_next(start_idx + bytes_consumed, bytes,
-                                    with_iana)
-                    bytes_consumed += sub_bytes_consumed
-
-                    big_int = parse(BigInt, bytes2hex(big_int_bytes),
-                                    HEX_BASE)
-                    if tag == NEG_BIG_INT_TAG
-                        big_int = -(big_int + 1)
-                    end
-
-                    data = big_int
-                else
-                    data = retrieve_plain_pair()
+                big_int = parse(
+                    BigInt, bytes2hex(big_int_bytes), base = HEX_BASE
+                )
+                if tag == NEG_BIG_INT_TAG
+                    big_int = -(big_int + 1)
                 end
+
+                data = big_int
             else
                 data = retrieve_plain_pair()
             end
-
-        elseif typ == TYPE_7
-            addntl_info = first_byte & ADDNTL_INFO_MASK
-            bytes_consumed = 1
-
-            if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
-                bytes_consumed += 1
-                if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE
-                    simple_val = addntl_info
-                else
-                    bytes_consumed += 1
-                    simple_val = bytes[start_idx + 1]
-                end
-
-                if simple_val == SIMPLE_FALSE
-                    data = false
-                elseif simple_val == SIMPLE_TRUE
-                    data = true
-                elseif simple_val == SIMPLE_NULL
-                    data = Null()
-                elseif simple_val == SIMPLE_UNDEF
-                    data = Undefined()
-                else
-                    data = Simple(simple_val)
-                end
-            else
-                if addntl_info == ADDNTL_INFO_FLOAT64
-                    float_byte_len = SIZE_OF_FLOAT64
-                elseif addntl_info == ADDNTL_INFO_FLOAT32
-                    float_byte_len = SIZE_OF_FLOAT32
-                elseif addntl_info == ADDNTL_INFO_FLOAT16
-                    error("Decoding 16-bit floats isn't supported.")
-                end
-
-                bytes_consumed += float_byte_len
-                data = hex2num(bytes2hex(
-                    bytes[(start_idx + 1):(start_idx + float_byte_len)]
-                ))
-            end
-
-        elseif first_byte & ADDNTL_INFO_MASK == ADDNTL_INFO_INDEF
-            data, bytes_consumed =
-                decode_next_indef(start_idx, bytes, typ, with_iana)
-
-        elseif typ == TYPE_2
-            byte_string_len, bytes_consumed =
-                decode_unsigned(start_idx, bytes)
-            start_idx += bytes_consumed
-
-            data =
-                bytes[start_idx:(start_idx + byte_string_len - 1)]
-            bytes_consumed += byte_string_len
-
-        elseif typ == TYPE_3
-            string_bytes, bytes_consumed =
-                decode_unsigned(start_idx, bytes)
-            start_idx += bytes_consumed
-            data = (VERSION < v"0.5.0") ?
-                UTF8String(bytes[start_idx:(start_idx + string_bytes - 1)]) :
-                String(bytes[start_idx:(start_idx + string_bytes - 1)])
-            bytes_consumed += string_bytes
-
-        elseif typ == TYPE_4
-            vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-            data = Vector(vec_len)
-            for i in 1:vec_len
-                data[i], sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
-                bytes_consumed += sub_bytes_consumed
-            end
-
-        elseif typ == TYPE_5
-            map_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-            data = Dict()
-            for i in 1:map_len
-                key, key_bytes =
-                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
-                bytes_consumed += key_bytes
-
-                value, value_bytes =
-                    decode_next(start_idx + bytes_consumed, bytes, with_iana)
-                bytes_consumed += value_bytes
-
-                data[key] = value
-            end
+        else
+            data = retrieve_plain_pair()
         end
+
+    elseif typ == TYPE_7
+        addntl_info = first_byte & ADDNTL_INFO_MASK
+        bytes_consumed = 1
+
+        if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
+            bytes_consumed += 1
+            if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE
+                simple_val = addntl_info
+            else
+                bytes_consumed += 1
+                simple_val = bytes[start_idx + 1]
+            end
+
+            if simple_val == SIMPLE_FALSE
+                data = false
+            elseif simple_val == SIMPLE_TRUE
+                data = true
+            elseif simple_val == SIMPLE_NULL
+                data = Null()
+            elseif simple_val == SIMPLE_UNDEF
+                data = Undefined()
+            else
+                data = Simple(simple_val)
+            end
+        else
+
+            if addntl_info == ADDNTL_INFO_FLOAT64
+                float_byte_len = SIZE_OF_FLOAT64
+                FloatT = Float64; UintT = UInt64
+            elseif addntl_info == ADDNTL_INFO_FLOAT32
+                float_byte_len = SIZE_OF_FLOAT32
+                FloatT = Float32; UintT = UInt32
+            elseif addntl_info == ADDNTL_INFO_FLOAT16
+                float_byte_len = SIZE_OF_FLOAT16
+                FloatT = Float16; UintT = UInt16
+            end
+
+            bytes_consumed += float_byte_len
+            hex = bytes2hex(
+                bytes[(start_idx + 1):(start_idx + float_byte_len)]
+            )
+            data = reinterpret(FloatT, parse(UintT, hex, base = 16))
+        end
+
+    elseif first_byte & ADDNTL_INFO_MASK == ADDNTL_INFO_INDEF
+        data, bytes_consumed =
+            decode_next_indef(start_idx, bytes, typ, with_iana)
+
+    elseif typ == TYPE_2
+        byte_string_len, bytes_consumed =
+            decode_unsigned(start_idx, bytes)
+        start_idx += bytes_consumed
+
+        data =
+            bytes[start_idx:(start_idx + byte_string_len - 1)]
+        bytes_consumed += byte_string_len
+
+    elseif typ == TYPE_3
+        string_bytes, bytes_consumed =
+            decode_unsigned(start_idx, bytes)
+        start_idx += bytes_consumed
+        data = String(bytes[start_idx:(start_idx + string_bytes - 1)])
+
+        bytes_consumed += string_bytes
+
+    elseif typ == TYPE_4
+        vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
+        data = Vector(undef, vec_len)
+        for i in 1:vec_len
+            data[i], sub_bytes_consumed =
+                decode_next(start_idx + bytes_consumed, bytes, with_iana)
+            bytes_consumed += sub_bytes_consumed
+        end
+
+    elseif typ == TYPE_5
+        map_len, bytes_consumed = decode_unsigned(start_idx, bytes)
+        data = Dict()
+        for i in 1:map_len
+            key, key_bytes =
+                decode_next(start_idx + bytes_consumed, bytes, with_iana)
+            bytes_consumed += key_bytes
+
+            value, value_bytes =
+                decode_next(start_idx + bytes_consumed, bytes, with_iana)
+            bytes_consumed += value_bytes
+
+            data[key] = value
+        end
+    end
 
     return data, bytes_consumed
 end
