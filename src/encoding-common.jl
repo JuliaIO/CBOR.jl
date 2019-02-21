@@ -20,98 +20,99 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 =#
 
-function encode_unsigned_with_type(type_bits::UInt8,
-                                   num::Unsigned,
-                                   bytes::Array{UInt8, 1})
-    if num < SINGLE_BYTE_UINT_PLUS_ONE
-        byte_len = 0
-        addntl_info = num
-    elseif num < UINT8_MAX_PLUS_ONE
-        byte_len = sizeof(UInt8)
-        addntl_info = ADDNTL_INFO_UINT8
-    elseif num < UINT16_MAX_PLUS_ONE
-        byte_len = sizeof(UInt16)
-        addntl_info = ADDNTL_INFO_UINT16
-    elseif num < UINT32_MAX_PLUS_ONE
-        byte_len = sizeof(UInt32)
-        addntl_info = ADDNTL_INFO_UINT32
-    elseif num < UINT64_MAX_PLUS_ONE
-        byte_len = sizeof(UInt64)
-        addntl_info = ADDNTL_INFO_UINT64
-    else
-        error("128-bits ints can't be encoded in the CBOR format.")
-    end
+cbor_tag(::UInt8) = ADDNTL_INFO_UINT8
+cbor_tag(::UInt16) = ADDNTL_INFO_UINT16
+cbor_tag(::UInt32) = ADDNTL_INFO_UINT32
+cbor_tag(::UInt32) = ADDNTL_INFO_UINT64
 
-    push!(bytes, type_bits | addntl_info)
+cbor_tag(::Float64) = ADDNTL_INFO_FLOAT64
+cbor_tag(::Float32) = ADDNTL_INFO_FLOAT32
+cbor_tag(::Float16) = ADDNTL_INFO_FLOAT16
 
-    i = length(bytes) + 1
-    for _ in 1:byte_len
-        insert!(bytes, i, num & LOWEST_ORDER_BYTE_MASK)
-        num >>>= BITS_PER_BYTE
+
+function encode_unsigned_with_type(
+        io::IO, type_bits::UInt8, num::Unsigned
+    )
+    write(io, type_bits | type_tag(num))
+    if sizeof(num) > 1
+        write(io, bswap(num))
     end
 end
+function encode(io::IO, float::Union{Float64, Float32, Float16})
+    write(io, TYPE_7 | cbor_tag(float))
+    # hton only works for 32 + 64, while bswap works for all
+    write(io, Base.bswap_int(float))
+end
+
 
 # ------- straightforward encoding for a few Julia types
-
-function encode(bool::Bool, bytes::Array{UInt8, 1})
-    push!(bytes, CBOR_FALSE_BYTE + bool)
+function encode(io::IO, bool::Bool)
+    write(io, CBOR_FALSE_BYTE + bool)
 end
 
-function encode(num::Unsigned, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_0, num, bytes)
+function encode(io::IO, num::Unsigned)
+    encode_unsigned_with_type(io, TYPE_0, num)
 end
 
-function encode(num::Signed, bytes::Array{UInt8, 1})
-    if num < 0
-        return encode_unsigned_with_type(TYPE_1, Unsigned(-num - 1), bytes)
-    else
-        return encode_unsigned_with_type(TYPE_0, Unsigned(num), bytes)
-    end
+function encode(io::IO, num::Signed)
+    return encode_unsigned_with_type(io, TYPE_1, Unsigned(-num - 1))
 end
-
 
 function struct2dict(typ::T) where T
     fnames = fieldnames(T)
     Dict(zip(string.(fnames), getfield.((typ,), fnames)))
 end
 
-# Any Julia Type
-function encode(struct_type::T, bytes::Array{UInt8, 1}) where T
+"""
+Any Julia type get's serialized as Tag 27
+Tag             27
+Data Item       array [typename, constructargs...]
+Semantics       Serialised language-independent object with type name and constructor arguments
+Reference       http://cbor.schmorp.de/generic-object
+Contact         Marc A. Lehmann <cbor@schmorp.de>
+"""
+function encode(io::IO, struct_type::T) where T
     io = IOBuffer();
     print(io, "Julia/") # language name tag like in the specs
-    io64 = Base64EncodePipe(io); serialize(io64, T); close(io64) # encode the type in the tag
-    encode(Tag(27, [String(take!(io)), struct2dict(struct_type)]), bytes)
-end
-# function encode(data, bytes::Array{UInt8, 1})
-#     encode_custom_type(data, bytes)
-# end
-
-function encode(byte_string::AbstractVector{UInt8}, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_string)), bytes)
-    append!(bytes, byte_string)
-end
-
-function encode(string::String, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-    append!(bytes, Vector{UInt8}(string))
+    # encode the type in the tag
+    io64 = Base64EncodePipe(io); serialize(io64, T); close(io64)
+    # TODO don't use a Dict and use  [typename, constructargs...] as indicated
+    # by the specs... The thing is, Closure expects a 2 length array -.-
+    encode(
+        io,
+        Tag(
+            CUSTOM_LANGUAGE_TYPE,
+            [String(take!(io)), struct2dict(struct_type)]
+        )
+    )
 end
 
-function encode(list::Vector, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_4, Unsigned(length(list)), bytes)
+function encode(io::IO, byte_string::Vector{UInt8})
+    encode_unsigned_with_type(io, TYPE_2, Unsigned(length(byte_string)))
+    write(io, byte_string)
+end
+
+function encode(io::IO, string::String)
+    encode_unsigned_with_type(io, TYPE_3, Unsigned(sizeof(string)))
+    write(io, string)
+end
+
+function encode(io::IO, list::Vector)
+    encode_unsigned_with_type(io, TYPE_4, Unsigned(length(list)))
     for e in list
-        encode(e, bytes)
+        encode(io, e)
     end
 end
 
-function encode(map::AbstractDict, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_5, Unsigned(length(map)), bytes)
+function encode(io::IO, map::Dict)
+    encode_unsigned_with_type(io, TYPE_5, Unsigned(length(map)))
     for (key, value) in map
-        encode(key, bytes)
-        encode(value, bytes)
+        encode(io, key)
+        encode(io, value)
     end
 end
 
-function encode(big_int::BigInt, bytes::Array{UInt8, 1})
+function encode(io::IO, big_int::BigInt)
     if big_int < 0
         hex_str = hex(-big_int - 1)
         tag = NEG_BIG_INT_TAG
@@ -119,43 +120,26 @@ function encode(big_int::BigInt, bytes::Array{UInt8, 1})
         hex_str = hex(big_int)
         tag = POS_BIG_INT_TAG
     end
-
-    encode_unsigned_with_type(TYPE_6, Unsigned(tag), bytes)
-
+    encode_unsigned_with_type(io, TYPE_6, Unsigned(tag))
     if isodd(length(hex_str))
         hex_str = "0" * hex_str
     end
-
-    encode(hex2bytes(hex_str), bytes)
+    encode(io, hex2bytes(hex_str))
 end
 
-cbor_tag(x::Float64) = TYPE_7 | ADDNTL_INFO_FLOAT64
-cbor_tag(x::Float32) = TYPE_7 | ADDNTL_INFO_FLOAT32
-cbor_tag(x::Float16) = TYPE_7 | ADDNTL_INFO_FLOAT16
-
-
-function encode(io::IO, float::Union{Float64, Float32, Float16})
-    write(io, cbor_tag(float))
-    # hton only works for 32 + 64, while bswap works for all
-    write(io, Base.bswap_int(float))
-end
-
-
-function encode(tag::Tag, bytes::Array{UInt8, 1})
+function encode(io::IO, tag::Tag)
     if typeof(tag.id) <: Integer && tag.id >= 0
-        encode_with_tag(Unsigned(tag.id), tag.data, bytes)
-    elseif typeof(tag.id) <: Channel
-        encode_indef_length_collection(tag.id, tag.data, bytes)
-    else
-        encode_custom_type(tag, bytes)
+        encode_with_tag(io, Unsigned(tag.id), tag.data)
+    else # typeof(tag.id) <: Channel Must be Channel, since it's Union{Int, Channel}
+        encode_indef_length_collection(io, tag.id, tag.data)
     end
 end
 
 
 # ------- encoding for indefinite length collections
-
-function encode_indef_length_collection(producer::Channel, collection_type,
-                                        bytes::Array{UInt8, 1})
+function encode_indef_length_collection(
+        io::IO, producer::Channel, collection_type
+    )
     if collection_type <: AbstractVector{UInt8}
         typ = TYPE_2
     elseif collection_type <: String
@@ -168,66 +152,35 @@ function encode_indef_length_collection(producer::Channel, collection_type,
         error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
     end
 
-    push!(bytes, typ | ADDNTL_INFO_INDEF)
+    write(io, typ | ADDNTL_INFO_INDEF)
 
     count = 0
     for e in producer
-        encode(e, bytes)
+        encode(io, e)
         count += 1
     end
 
     if typ == TYPE_5 && isodd(count)
         error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
     end
-
-    push!(bytes, BREAK_INDEF)
+    write(io, BREAK_INDEF)
 end
 
 # ------- encoding with tags
 
-function encode_with_tag(tag::Unsigned, data, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_6, tag, bytes)
-    encode(data, bytes)
+function encode_with_tag(io::IO, tag::Unsigned, data)
+    encode_unsigned_with_type(io, TYPE_6, tag)
+    encode(io, data)
 end
 
-# ------- encoding for user-defined types
-
-function encode_custom_type(data, bytes::Array{UInt8, 1})
-    type_map = Dict()
-
-    type_map[String("type")] = String(string(typeof(data)) )
-
-    for f in fieldnames(data)
-        type_map[String(string(f))] = data.(f)
-    end
-
-    encode(type_map, bytes)
-end
-
-# ------- encoding for Simple types
-
-struct Simple
-    val::UInt8
-end
-
-Base.isequal(a::Simple, b::Simple) = Base.isequal(a.val, b.val)
-
-function encode(simple::Simple, bytes::Array{UInt8, 1})
-    encode_unsigned_with_type(TYPE_7, simple.val, bytes)
-end
-
-# ------- encoding for Null and Undefined
-
-struct Null
-end
 
 struct Undefined
 end
 
-function encode(null::Null, bytes::Array{UInt8, 1})
+function encode(io::IO, null::Nothing)
     push!(bytes, CBOR_NULL_BYTE)
 end
 
-function encode(undef::Undefined, bytes::Array{UInt8, 1})
+function encode(io::IO, undef::Undefined)
     push!(bytes, CBOR_UNDEF_BYTE)
 end
