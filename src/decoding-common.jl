@@ -102,10 +102,15 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
     return data, bytes_consumed
 end
 
+
+@generated function type_from_dict(::Type{T}, dict) where T
+    field_data = map(field-> :(convert(fieldtype(T, $(QuoteNode(field))), dict[$(string(field))])), fieldnames(T))
+    Expr(:new, T, field_data...)
+end
+
 function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
     first_byte = bytes[start_idx]
     typ = first_byte & TYPE_BITS_MASK
-
     if typ == TYPE_0
         data, bytes_consumed = decode_unsigned(start_idx, bytes)
 
@@ -126,7 +131,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                             with_iana)
             bytes_consumed += data_bytes
 
-            return Pair(tag, tagged_data)
+            return Tag(tag, tagged_data)
         end
 
         if with_iana
@@ -144,6 +149,16 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
                 end
 
                 data = big_int
+            elseif tag == 27 # Type Tag
+                tagdata = retrieve_plain_pair()
+                data = tagdata.data
+                name, serialized_type, field_data_dict = data
+                if startswith(name, "Julia/") # Julia Type
+                    T = deserialize(IOBuffer(UInt8.(serialized_type)))
+                    data = type_from_dict(T, field_data_dict)
+                else
+                    data = tagdata # can't decode
+                end
             else
                 data = retrieve_plain_pair()
             end

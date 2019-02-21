@@ -1,8 +1,10 @@
 using Test
 using CBOR
 using DataStructures
-
+import CBOR: Tag
 # Taken (and modified) from Appendix A of RFC 7049
+
+
 
 two_way_test_vectors = [
     0 => hex2bytes("00"),
@@ -44,13 +46,13 @@ two_way_test_vectors = [
     Simple(24) => hex2bytes("f818"),
     Simple(255) => hex2bytes("f8ff"),
 
-    Pair(0, "2013-03-21T20:04:00Z") =>
+    Tag(0, "2013-03-21T20:04:00Z") =>
         hex2bytes("c074323031332d30332d32315432303a30343a30305a"),
-    Pair(1, 1363896240) => hex2bytes("c11a514b67b0"),
-    Pair(1, 1363896240.5) => hex2bytes("c1fb41d452d9ec200000"),
-    Pair(23, hex2bytes("01020304")) => hex2bytes("d74401020304"),
-    Pair(24, hex2bytes("6449455446")) => hex2bytes("d818456449455446"),
-    Pair(32, "http://www.example.com") =>
+    Tag(1, 1363896240) => hex2bytes("c11a514b67b0"),
+    Tag(1, 1363896240.5) => hex2bytes("c1fb41d452d9ec200000"),
+    Tag(23, hex2bytes("01020304")) => hex2bytes("d74401020304"),
+    Tag(24, hex2bytes("6449455446")) => hex2bytes("d818456449455446"),
+    Tag(32, "http://www.example.com") =>
         hex2bytes("d82076687474703a2f2f7777772e6578616d706c652e636f6d"),
 
     UInt8[] => hex2bytes("40"),
@@ -146,7 +148,7 @@ end
         else
             Channel(list_producer)
         end
-        @test isequal(bytes, encode(Pair(task, data[3])))
+        @test isequal(bytes, encode(Tag(task, data[3])))
         @test isequal(data[2], decode(bytes))
     end
 end

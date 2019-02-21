@@ -69,23 +69,32 @@ function encode(num::Signed, bytes::Array{UInt8, 1})
     end
 end
 
+
+function struct2dict(typ::T) where T
+    fnames = fieldnames(T)
+    Dict(zip(string.(fnames), getfield.((typ,), fnames)))
+end
+
+# Any Julia Type
+function encode(struct_type::T, bytes::Array{UInt8, 1}) where T
+    io = IOBuffer(); serialize(io, T)
+    encode(Tag(27, [string("Julia/", nameof(T)), take!(io), struct2dict(struct_type)]), bytes)
+end
+# function encode(data, bytes::Array{UInt8, 1})
+#     encode_custom_type(data, bytes)
+# end
+
 function encode(byte_string::AbstractVector{UInt8}, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_string)), bytes)
     append!(bytes, byte_string)
 end
-if VERSION < v"0.5.0"
-    function encode(string::Union{UTF8String, ASCIIString}, bytes::Array{UInt8, 1})
-        encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-        append!(bytes, string.data)
-    end
-else
-    function encode(string::String, bytes::Array{UInt8, 1})
-        encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
-        append!(bytes, Vector{UInt8}(string))
-    end
+
+function encode(string::String, bytes::Array{UInt8, 1})
+    encode_unsigned_with_type(TYPE_3, Unsigned(sizeof(string)), bytes)
+    append!(bytes, Vector{UInt8}(string))
 end
 
-function encode(list::Union{AbstractVector, Tuple}, bytes::Array{UInt8, 1})
+function encode(list::Vector, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_4, Unsigned(length(list)), bytes)
     for e in list
         encode(e, bytes)
@@ -137,31 +146,17 @@ function encode(float::Union{Float64, Float32, Float16}, bytes::Array{UInt8, 1})
     append!(bytes, float_bytes)
 end
 
-if VERSION < v"0.6.0"
-    function encode(pair::Pair, bytes::Array{UInt8, 1})
-        if typeof(pair.first) <: Integer && pair.first >= 0
-            encode_with_tag(Unsigned(pair.first), pair.second, bytes)
-        elseif typeof(pair.first) == Task
-            encode_indef_length_collection(pair.first, pair.second, bytes)
-        else
-            encode_custom_type(pair, bytes)
-        end
-    end
-else
-    function encode(pair::Pair, bytes::Array{UInt8, 1})
-        if typeof(pair.first) <: Integer && pair.first >= 0
-            encode_with_tag(Unsigned(pair.first), pair.second, bytes)
-        elseif typeof(pair.first) <: Channel
-            encode_indef_length_collection(pair.first, pair.second, bytes)
-        else
-            encode_custom_type(pair, bytes)
-        end
+
+function encode(tag::Tag, bytes::Array{UInt8, 1})
+    if typeof(tag.id) <: Integer && tag.id >= 0
+        encode_with_tag(Unsigned(tag.id), tag.data, bytes)
+    elseif typeof(tag.id) <: Channel
+        encode_indef_length_collection(tag.id, tag.data, bytes)
+    else
+        encode_custom_type(tag, bytes)
     end
 end
 
-function encode(data, bytes::Array{UInt8, 1})
-    encode_custom_type(data, bytes)
-end
 
 # ------- encoding for indefinite length collections
 
@@ -203,32 +198,17 @@ end
 
 # ------- encoding for user-defined types
 
-if VERSION < v"0.5.0"
-    function encode_custom_type(data, bytes::Array{UInt8, 1})
-        type_map = Dict()
+function encode_custom_type(data, bytes::Array{UInt8, 1})
+    type_map = Dict()
 
-        type_map[UTF8String("type")] = UTF8String(string(typeof(data)) )
+    type_map[String("type")] = String(string(typeof(data)) )
 
-        for f in fieldnames(data)
-            type_map[UTF8String(string(f))] = data.(f)
-        end
-
-        encode(type_map, bytes)
+    for f in fieldnames(data)
+        type_map[String(string(f))] = data.(f)
     end
-else
-    function encode_custom_type(data, bytes::Array{UInt8, 1})
-        type_map = Dict()
 
-        type_map[String("type")] = String(string(typeof(data)) )
-
-        for f in fieldnames(data)
-            type_map[String(string(f))] = data.(f)
-        end
-
-        encode(type_map, bytes)
-    end
+    encode(type_map, bytes)
 end
-
 
 # ------- encoding for Simple types
 
