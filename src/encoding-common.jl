@@ -69,6 +69,23 @@ function encode(num::Signed, bytes::Array{UInt8, 1})
     end
 end
 
+
+function struct2dict(typ::T) where T
+    fnames = fieldnames(T)
+    Dict(zip(string.(fnames), getfield.((typ,), fnames)))
+end
+
+# Any Julia Type
+function encode(struct_type::T, bytes::Array{UInt8, 1}) where T
+    io = IOBuffer();
+    print(io, "Julia/") # language name tag like in the specs
+    io64 = Base64EncodePipe(io); serialize(io64, T); close(io64) # encode the type in the tag
+    encode(Tag(27, [String(take!(io)), struct2dict(struct_type)]), bytes)
+end
+# function encode(data, bytes::Array{UInt8, 1})
+#     encode_custom_type(data, bytes)
+# end
+
 function encode(byte_string::AbstractVector{UInt8}, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_2, Unsigned(length(byte_string)), bytes)
     append!(bytes, byte_string)
@@ -79,7 +96,7 @@ function encode(string::String, bytes::Array{UInt8, 1})
     append!(bytes, Vector{UInt8}(string))
 end
 
-function encode(list::Union{AbstractVector, Tuple}, bytes::Array{UInt8, 1})
+function encode(list::Vector, bytes::Array{UInt8, 1})
     encode_unsigned_with_type(TYPE_4, Unsigned(length(list)), bytes)
     for e in list
         encode(e, bytes)
@@ -124,19 +141,16 @@ function encode(io::IO, float::Union{Float64, Float32, Float16})
 end
 
 
-function encode(pair::Pair, bytes::Array{UInt8, 1})
-    if typeof(pair.first) <: Integer && pair.first >= 0
-        encode_with_tag(Unsigned(pair.first), pair.second, bytes)
-    elseif typeof(pair.first) <: Channel
-        encode_indef_length_collection(pair.first, pair.second, bytes)
+function encode(tag::Tag, bytes::Array{UInt8, 1})
+    if typeof(tag.id) <: Integer && tag.id >= 0
+        encode_with_tag(Unsigned(tag.id), tag.data, bytes)
+    elseif typeof(tag.id) <: Channel
+        encode_indef_length_collection(tag.id, tag.data, bytes)
     else
-        encode_custom_type(pair, bytes)
+        encode_custom_type(tag, bytes)
     end
 end
 
-function encode(data, bytes::Array{UInt8, 1})
-    encode_custom_type(data, bytes)
-end
 
 # ------- encoding for indefinite length collections
 
@@ -178,7 +192,6 @@ end
 
 # ------- encoding for user-defined types
 
-
 function encode_custom_type(data, bytes::Array{UInt8, 1})
     type_map = Dict()
 
@@ -190,7 +203,6 @@ function encode_custom_type(data, bytes::Array{UInt8, 1})
 
     encode(type_map, bytes)
 end
-
 
 # ------- encoding for Simple types
 

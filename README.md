@@ -145,11 +145,11 @@ Dict{Any,Any} with 2 entries:
 
 #### Tagging
 
-To *tag* one of the above types, encode a `Pair` with `first` being an
+To *tag* one of the above types, encode a `Tag` with `first` being an
 **non-negative** integer, and `second` being the data you want to tag.
 
 ```julia
-> bytes = encode(Pair(80, "web servers"))
+> bytes = encode(Tag(80, "web servers"))
 
 > data = decode(bytes)
 0x50=>"HTTP Web Server"
@@ -243,11 +243,11 @@ Wrap it in a `Channel`
 task = Channel(producer)
 ```
 
-Encode a `Pair` with `first` being the `Channel` just created, and `second` being
+Encode a `Tag` with `first` being the `Channel` just created, and `second` being
 a valid collection type you want to encode.
 
 ```julia
-> encode(Pair(task, AbstractVector))
+> encode(Tag(task, AbstractVector))
 18-element Array{UInt8, 1}: 0x9f 0x01 0x04 0x09 0x10 ... 0x18 0x51 0x18 0x64 0xff
 
 > decode(bytes)
@@ -265,7 +265,7 @@ function cubes(ch::Channel)
     end
 end
 
-> bytes = encode(Pair(Channel(cubes), AbstractDict))
+> bytes = encode(Tag(Channel(cubes), AbstractDict))
 34-element Array{UInt8, 1}: 0xbf 0x01 0x01 0x02 0x08 ... 0x0a 0x19 0x03 0xe8 0xff
 
 > decode(bytes)
@@ -292,7 +292,7 @@ function producer(ch::Channel)
     end
 end
 
-> bytes = encode(Pair(Channel(producer), String))
+> bytes = encode(Tag(Channel(producer), String))
 23-element Array{UInt8, 1}: 0x7f 0x61 0x46 0x63 0x69 ... 0x6f 0x62 0x6f 0x64 0xff
 
 > decode(bytes)
