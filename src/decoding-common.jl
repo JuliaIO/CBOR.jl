@@ -219,10 +219,11 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
     elseif typ == TYPE_4
         vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
         data = Vector(undef, vec_len)
-        for i in 1:vec_len
-            data[i], sub_bytes_consumed =
+        data = map(1:vec_len) do i
+            elem, sub_bytes_consumed =
                 decode_next(start_idx + bytes_consumed, bytes, with_iana)
             bytes_consumed += sub_bytes_consumed
+            elem
         end
 
     elseif typ == TYPE_5
