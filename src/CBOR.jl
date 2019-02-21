@@ -22,7 +22,7 @@ THE SOFTWARE.
 
 module CBOR
 
-using Printf, Serialization
+using Printf, Serialization, Base64
 
 num2hex(n) = string(n, base = 16, pad = sizeof(n) * 2)
 num2hex(n::AbstractFloat) = num2hex(reinterpret(Unsigned, n))

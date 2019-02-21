@@ -152,9 +152,9 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             elseif tag == 27 # Type Tag
                 tagdata = retrieve_plain_pair()
                 data = tagdata.data
-                name, serialized_type, field_data_dict = data
+                name, field_data_dict = data
                 if startswith(name, "Julia/") # Julia Type
-                    T = deserialize(IOBuffer(UInt8.(serialized_type)))
+                    T = deserialize(IOBuffer(base64decode(name[7:end])))
                     data = type_from_dict(T, field_data_dict)
                 else
                     data = tagdata # can't decode
