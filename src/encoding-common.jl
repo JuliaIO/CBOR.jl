@@ -77,8 +77,10 @@ end
 
 # Any Julia Type
 function encode(struct_type::T, bytes::Array{UInt8, 1}) where T
-    io = IOBuffer(); io64 = Base64EncodePipe(io); serialize(io64, T); close(io64)
-    encode(Tag(27, [string("Julia/", String(take!(io))), struct2dict(struct_type)]), bytes)
+    io = IOBuffer();
+    print(io, "Julia/") # language name tag like in the specs
+    io64 = Base64EncodePipe(io); serialize(io64, T); close(io64) # encode the type in the tag
+    encode(Tag(27, [String(take!(io)), struct2dict(struct_type)]), bytes)
 end
 # function encode(data, bytes::Array{UInt8, 1})
 #     encode_custom_type(data, bytes)

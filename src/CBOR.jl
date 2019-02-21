@@ -45,15 +45,10 @@ export decode, decode_with_iana
 export Simple, Null, Undefined
 
 function decode(cbor_bytes::Array{UInt8, 1})
-    data, _ = decode_next(1, cbor_bytes, false)
-    return data
-end
-
-function decode_with_iana(cbor_bytes::Array{UInt8, 1})
-    @warn("Results from decode_with_iana may change in the future.")
     data, _ = decode_next(1, cbor_bytes, true)
     return data
 end
+
 
 function encode(data)
     bytes = UInt8[]
