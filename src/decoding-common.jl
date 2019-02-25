@@ -103,9 +103,9 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
 end
 
 
-@generated function type_from_dict(::Type{T}, dict) where T
-    field_data = map(field-> :(convert(fieldtype(T, $(QuoteNode(field))), dict[$(string(field))])), fieldnames(T))
-    Expr(:new, T, field_data...)
+@generated function type_from_fields(::Type{T}, fields) where T
+    field_data = ntuple(i-> :(fields[$i]), fieldcount(T))
+    expr = Expr(:new, T, field_data...)
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
@@ -116,10 +116,11 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
 
     elseif typ == TYPE_1
         data, bytes_consumed = decode_unsigned(start_idx, bytes)
-        if (i = Int128(data) + 1) > typemax(Int64)
+        sdata = signed(data)
+        if (i = Int128(sdata) + one(sdata)) > typemax(Int64)
             data = -i
         else
-            data = -(Signed(data) + 1)
+            data = -(sdata + one(sdata))
         end
 
     elseif typ == TYPE_6
@@ -134,33 +135,29 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             return Tag(tag, tagged_data)
         end
 
-        if with_iana
-            if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
-                big_int_bytes, sub_bytes_consumed =
-                    decode_next(start_idx + bytes_consumed, bytes,
-                                with_iana)
-                bytes_consumed += sub_bytes_consumed
+        if tag == POS_BIG_INT_TAG || tag == NEG_BIG_INT_TAG
+            big_int_bytes, sub_bytes_consumed =
+                decode_next(start_idx + bytes_consumed, bytes,
+                            with_iana)
+            bytes_consumed += sub_bytes_consumed
 
-                big_int = parse(
-                    BigInt, bytes2hex(big_int_bytes), base = HEX_BASE
-                )
-                if tag == NEG_BIG_INT_TAG
-                    big_int = -(big_int + 1)
-                end
+            big_int = parse(
+                BigInt, bytes2hex(big_int_bytes), base = HEX_BASE
+            )
+            if tag == NEG_BIG_INT_TAG
+                big_int = -(big_int + 1)
+            end
 
-                data = big_int
-            elseif tag == 27 # Type Tag
-                tagdata = retrieve_plain_pair()
-                data = tagdata.data
-                name, field_data_dict = data
-                if startswith(name, "Julia/") # Julia Type
-                    T = deserialize(IOBuffer(base64decode(name[7:end])))
-                    data = type_from_dict(T, field_data_dict)
-                else
-                    data = tagdata # can't decode
-                end
+            data = big_int
+        elseif tag == CUSTOM_LANGUAGE_TYPE # Type Tag
+            tagdata = retrieve_plain_pair()
+            data = tagdata.data
+            name, field_data = data
+            if startswith(name, "Julia/") # Julia Type
+                T = deserialize(IOBuffer(base64decode(name[7:end])))
+                data = type_from_fields(T, field_data)
             else
-                data = retrieve_plain_pair()
+                data = tagdata # can't decode
             end
         else
             data = retrieve_plain_pair()
@@ -184,7 +181,7 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
             elseif simple_val == SIMPLE_TRUE
                 data = true
             elseif simple_val == SIMPLE_NULL
-                data = Null()
+                data = nothing
             elseif simple_val == SIMPLE_UNDEF
                 data = Undefined()
             else
@@ -233,7 +230,6 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
 
     elseif typ == TYPE_4
         vec_len, bytes_consumed = decode_unsigned(start_idx, bytes)
-        data = Vector(undef, vec_len)
         data = map(1:vec_len) do i
             elem, sub_bytes_consumed =
                 decode_next(start_idx + bytes_consumed, bytes, with_iana)
