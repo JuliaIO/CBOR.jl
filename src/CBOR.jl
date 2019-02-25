@@ -51,9 +51,9 @@ end
 
 
 function encode(data)
-    bytes = UInt8[]
-    encode(data, bytes)
-    return bytes
+    io = IOBuffer()
+    encode(io, data)
+    return take!(io)
 end
 
 end

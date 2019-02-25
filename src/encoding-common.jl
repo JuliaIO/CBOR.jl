@@ -23,21 +23,46 @@ THE SOFTWARE.
 cbor_tag(::UInt8) = ADDNTL_INFO_UINT8
 cbor_tag(::UInt16) = ADDNTL_INFO_UINT16
 cbor_tag(::UInt32) = ADDNTL_INFO_UINT32
-cbor_tag(::UInt32) = ADDNTL_INFO_UINT64
+cbor_tag(::UInt64) = ADDNTL_INFO_UINT64
 
 cbor_tag(::Float64) = ADDNTL_INFO_FLOAT64
 cbor_tag(::Float32) = ADDNTL_INFO_FLOAT32
 cbor_tag(::Float16) = ADDNTL_INFO_FLOAT16
 
-
 function encode_unsigned_with_type(
-        io::IO, type_bits::UInt8, num::Unsigned
+        io::IO, typ::UInt8, num::Unsigned
     )
-    write(io, type_bits | type_tag(num))
-    if sizeof(num) > 1
-        write(io, bswap(num))
+    write(io, typ | cbor_tag(num))
+    write(io, bswap(num))
+end
+
+
+function encode_type_number(io::IO, typ::UInt8, x)
+    encode_type_number(io, typ, length(x))
+end
+
+"""
+Array lengths and other integers (e.g. tags) in CBOR are encoded with smallest integer type,
+which we do with this method!
+"""
+function encode_type_number(io::IO, typ::UInt8, num::Integer)
+    @assert num >= 0 "array lengths must be greater 0. Found: $num"
+    if num < SINGLE_BYTE_UINT_PLUS_ONE
+        write(io, typ | UInt8(num)) # smaller 24 gets directly stored in type tag
+    elseif num < UINT8_MAX_PLUS_ONE
+        encode_unsigned_with_type(io, typ, UInt8(num))
+    elseif num < UINT16_MAX_PLUS_ONE
+        encode_unsigned_with_type(io, typ, UInt16(num))
+    elseif num < UINT32_MAX_PLUS_ONE
+        encode_unsigned_with_type(io, typ, UInt32(num))
+    elseif num < UINT64_MAX_PLUS_ONE
+        encode_unsigned_with_type(io, typ, UInt64(num))
+    else
+        error("128-bits ints can't be encoded in the CBOR format.")
     end
 end
+
+
 function encode(io::IO, float::Union{Float64, Float32, Float16})
     write(io, TYPE_7 | cbor_tag(float))
     # hton only works for 32 + 64, while bswap works for all
@@ -54,58 +79,29 @@ function encode(io::IO, num::Unsigned)
     encode_unsigned_with_type(io, TYPE_0, num)
 end
 
-function encode(io::IO, num::Signed)
-    return encode_unsigned_with_type(io, TYPE_1, Unsigned(-num - 1))
-end
-
-function struct2dict(typ::T) where T
-    fnames = fieldnames(T)
-    Dict(zip(string.(fnames), getfield.((typ,), fnames)))
-end
-
-"""
-Any Julia type get's serialized as Tag 27
-Tag             27
-Data Item       array [typename, constructargs...]
-Semantics       Serialised language-independent object with type name and constructor arguments
-Reference       http://cbor.schmorp.de/generic-object
-Contact         Marc A. Lehmann <cbor@schmorp.de>
-"""
-function encode(io::IO, struct_type::T) where T
-    io = IOBuffer();
-    print(io, "Julia/") # language name tag like in the specs
-    # encode the type in the tag
-    io64 = Base64EncodePipe(io); serialize(io64, T); close(io64)
-    # TODO don't use a Dict and use  [typename, constructargs...] as indicated
-    # by the specs... The thing is, Closure expects a 2 length array -.-
-    encode(
-        io,
-        Tag(
-            CUSTOM_LANGUAGE_TYPE,
-            [String(take!(io)), struct2dict(struct_type)]
-        )
-    )
+function encode(io::IO, num::T) where T <: Signed
+    encode_unsigned_with_type(io, TYPE_1, unsigned(-num - one(T)))
 end
 
 function encode(io::IO, byte_string::Vector{UInt8})
-    encode_unsigned_with_type(io, TYPE_2, Unsigned(length(byte_string)))
+    encode_type_number(io, TYPE_2, byte_string)
     write(io, byte_string)
 end
 
 function encode(io::IO, string::String)
-    encode_unsigned_with_type(io, TYPE_3, Unsigned(sizeof(string)))
+    encode_type_number(io, TYPE_3, sizeof(string))
     write(io, string)
 end
 
 function encode(io::IO, list::Vector)
-    encode_unsigned_with_type(io, TYPE_4, Unsigned(length(list)))
+    encode_type_number(io, TYPE_4, list)
     for e in list
         encode(io, e)
     end
 end
 
 function encode(io::IO, map::Dict)
-    encode_unsigned_with_type(io, TYPE_5, Unsigned(length(map)))
+    encode_type_number(io, TYPE_5, map)
     for (key, value) in map
         encode(io, key)
         encode(io, value)
@@ -113,18 +109,17 @@ function encode(io::IO, map::Dict)
 end
 
 function encode(io::IO, big_int::BigInt)
-    if big_int < 0
-        hex_str = hex(-big_int - 1)
-        tag = NEG_BIG_INT_TAG
+    tag = if big_int < 0
+        big_int = -big_int - 1
+        NEG_BIG_INT_TAG
     else
-        hex_str = hex(big_int)
-        tag = POS_BIG_INT_TAG
+        POS_BIG_INT_TAG
     end
-    encode_unsigned_with_type(io, TYPE_6, Unsigned(tag))
+    hex_str = hex(big_int)
     if isodd(length(hex_str))
         hex_str = "0" * hex_str
     end
-    encode(io, hex2bytes(hex_str))
+    encode(io, Tag(tag, hex2bytes(hex_str)))
 end
 
 function encode(io::IO, tag::Tag)
@@ -169,7 +164,7 @@ end
 # ------- encoding with tags
 
 function encode_with_tag(io::IO, tag::Unsigned, data)
-    encode_unsigned_with_type(io, TYPE_6, tag)
+    encode_type_number(io, TYPE_6, tag)
     encode(io, data)
 end
 
@@ -178,9 +173,39 @@ struct Undefined
 end
 
 function encode(io::IO, null::Nothing)
-    push!(bytes, CBOR_NULL_BYTE)
+    write(io, CBOR_NULL_BYTE)
 end
 
 function encode(io::IO, undef::Undefined)
-    push!(bytes, CBOR_UNDEF_BYTE)
+    write(io, CBOR_UNDEF_BYTE)
+end
+
+
+function fields2array(typ::T) where T
+    fnames = fieldnames(T)
+    getfield.((typ,), [fnames...])
+end
+
+"""
+Any Julia type get's serialized as Tag 27
+Tag             27
+Data Item       array [typename, constructargs...]
+Semantics       Serialised language-independent object with type name and constructor arguments
+Reference       http://cbor.schmorp.de/generic-object
+Contact         Marc A. Lehmann <cbor@schmorp.de>
+"""
+function encode(io::IO, struct_type::T) where T
+    tio = IOBuffer();
+    print(tio, "Julia/") # language name tag like in the specs
+    # encode the type in the tag
+    io64 = Base64EncodePipe(tio); serialize(io64, T); close(io64)
+    # TODO don't use a Dict and use  [typename, constructargs...] as indicated
+    # by the specs... The thing is, Closure expects a 2 length array -.-
+    encode(
+        io,
+        Tag(
+            CUSTOM_LANGUAGE_TYPE,
+            [String(take!(tio)), fields2array(struct_type)]
+        )
+    )
 end
