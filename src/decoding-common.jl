@@ -102,10 +102,8 @@ function decode_next_indef(start_idx, bytes::Array{UInt8, 1}, typ::UInt8,
     return data, bytes_consumed
 end
 
-
-@generated function type_from_fields(::Type{T}, fields) where T
-    field_data = ntuple(i-> :(fields[$i]), fieldcount(T))
-    expr = Expr(:new, T, field_data...)
+function type_from_fields(::Type{T}, fields) where T
+    ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), T, fields, length(fields))
 end
 
 function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
@@ -152,10 +150,10 @@ function decode_next(start_idx, bytes::Array{UInt8, 1}, with_iana::Bool)
         elseif tag == CUSTOM_LANGUAGE_TYPE # Type Tag
             tagdata = retrieve_plain_pair()
             data = tagdata.data
-            name, field_data = data
+            name = data[1]
+            object_serialized = data[2]
             if startswith(name, "Julia/") # Julia Type
-                T = deserialize(IOBuffer(base64decode(name[7:end])))
-                data = type_from_fields(T, field_data)
+                data = deserialize(IOBuffer(object_serialized))
             else
                 data = tagdata # can't decode
             end

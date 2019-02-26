@@ -37,15 +37,15 @@ function encode_unsigned_with_type(
 end
 
 
-function encode_type_number(io::IO, typ::UInt8, x)
-    encode_type_number(io, typ, length(x))
+function encode_smallest_int(io::IO, typ::UInt8, x)
+    encode_smallest_int(io, typ, length(x))
 end
 
 """
 Array lengths and other integers (e.g. tags) in CBOR are encoded with smallest integer type,
 which we do with this method!
 """
-function encode_type_number(io::IO, typ::UInt8, num::Integer)
+function encode_smallest_int(io::IO, typ::UInt8, num::Integer)
     @assert num >= 0 "array lengths must be greater 0. Found: $num"
     if num < SINGLE_BYTE_UINT_PLUS_ONE
         write(io, typ | UInt8(num)) # smaller 24 gets directly stored in type tag
@@ -84,24 +84,24 @@ function encode(io::IO, num::T) where T <: Signed
 end
 
 function encode(io::IO, byte_string::Vector{UInt8})
-    encode_type_number(io, TYPE_2, byte_string)
+    encode_smallest_int(io, TYPE_2, byte_string)
     write(io, byte_string)
 end
 
 function encode(io::IO, string::String)
-    encode_type_number(io, TYPE_3, sizeof(string))
+    encode_smallest_int(io, TYPE_3, sizeof(string))
     write(io, string)
 end
 
 function encode(io::IO, list::Vector)
-    encode_type_number(io, TYPE_4, list)
+    encode_smallest_int(io, TYPE_4, list)
     for e in list
         encode(io, e)
     end
 end
 
 function encode(io::IO, map::Dict)
-    encode_type_number(io, TYPE_5, map)
+    encode_smallest_int(io, TYPE_5, map)
     for (key, value) in map
         encode(io, key)
         encode(io, value)
@@ -164,7 +164,7 @@ end
 # ------- encoding with tags
 
 function encode_with_tag(io::IO, tag::Unsigned, data)
-    encode_type_number(io, TYPE_6, tag)
+    encode_smallest_int(io, TYPE_6, tag)
     encode(io, data)
 end
 
@@ -178,6 +178,26 @@ end
 
 function encode(io::IO, undef::Undefined)
     write(io, CBOR_UNDEF_BYTE)
+end
+
+struct SmallInteger{T}
+    num::T
+end
+Base.convert(::Type{<: SmallInteger}, x) = SmallInteger(x)
+Base.convert(::Type{<: SmallInteger}, x::SmallInteger) = x
+Base.:(==)(a::SmallInteger, b::SmallInteger) = a.num == b.num
+Base.:(==)(a::Number, b::SmallInteger) = a == b.num
+Base.:(==)(a::SmallInteger, b::Number) = a.num == b
+
+function encode(io::IO, small::SmallInteger{<: Unsigned})
+    encode_smallest_int(io, TYPE_0, small.num)
+end
+function encode(io::IO, small::SmallInteger{<: Signed})
+    if small.num >= 0
+        encode_smallest_int(io, TYPE_0, unsigned(small.num))
+    else
+        encode_smallest_int(io, TYPE_1, unsigned(-small.num - one(small.num)))
+    end
 end
 
 
@@ -195,17 +215,16 @@ Reference       http://cbor.schmorp.de/generic-object
 Contact         Marc A. Lehmann <cbor@schmorp.de>
 """
 function encode(io::IO, struct_type::T) where T
-    tio = IOBuffer();
-    print(tio, "Julia/") # language name tag like in the specs
-    # encode the type in the tag
-    io64 = Base64EncodePipe(tio); serialize(io64, T); close(io64)
-    # TODO don't use a Dict and use  [typename, constructargs...] as indicated
-    # by the specs... The thing is, Closure expects a 2 length array -.-
+    # TODO don't use Serialization for the whole struct!
+    # It almost works to deserialize from just the fields and type,
+    # but that ends up being problematic for
+    # anonymous functions (the type changes between serialization & deserialization)
+    tio = IOBuffer(); serialize(tio, struct_type)
     encode(
         io,
         Tag(
             CUSTOM_LANGUAGE_TYPE,
-            [String(take!(tio)), fields2array(struct_type)]
+            [string("Julia/", T), take!(tio), fields2array(struct_type)]
         )
     )
 end

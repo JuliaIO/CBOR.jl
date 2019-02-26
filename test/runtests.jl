@@ -1,54 +1,52 @@
 using Test
 using CBOR
 using DataStructures
-import CBOR: Tag
+import CBOR: Tag, decode, encode, SmallInteger
 # Taken (and modified) from Appendix A of RFC 7049
 
 
 
 two_way_test_vectors = [
-    0 => hex2bytes("00"),
-    1 => hex2bytes("01"),
-    10 => hex2bytes("0a"),
-    23 => hex2bytes("17"),
-    24 => hex2bytes("1818"),
-    25 => hex2bytes("1819"),
-    100 => hex2bytes("1864"),
-    1000 => hex2bytes("1903e8"),
-    1000000 => hex2bytes("1a000f4240"),
-    1000000000000 => hex2bytes("1b000000e8d4a51000"),
-    18446744073709551615 => hex2bytes("1bffffffffffffffff"),
-    -18446744073709551616 => hex2bytes("3bffffffffffffffff"),
-    -1 => hex2bytes("20"),
-    -10 => hex2bytes("29"),
-    -100 => hex2bytes("3863"),
-    -1000 => hex2bytes("3903e7"),
+    SmallInteger(0) => hex2bytes("00"),
+    SmallInteger(1) => hex2bytes("01"),
+    SmallInteger(10) => hex2bytes("0a"),
+    SmallInteger(23) => hex2bytes("17"),
+    SmallInteger(24) => hex2bytes("1818"),
+    SmallInteger(25) => hex2bytes("1819"),
 
-    0.0 => hex2bytes("fa00000000"),
-    -0.0 => hex2bytes("fa80000000"),
-    1.0 => hex2bytes("fa3f800000"),
+    UInt8(100) => hex2bytes("1864"),
+    UInt16(1000) => hex2bytes("1903e8"),
+    UInt32(1000000) => hex2bytes("1a000f4240"),
+    UInt64(1000000000000) => hex2bytes("1b000000e8d4a51000"),
+    # UInt128(18446744073709551615) => hex2bytes("1bffffffffffffffff"),
+    # Int128(-18446744073709551616) => hex2bytes("3bffffffffffffffff"),
+    SmallInteger(-1) => hex2bytes("20"),
+    SmallInteger(-10) => hex2bytes("29"),
+    Int8(-100) => hex2bytes("3863"),
+    Int16(-1000) => hex2bytes("3903e7"),
+
+    0.0f0 => hex2bytes("fa00000000"),
+    -0.0f0 => hex2bytes("fa80000000"),
+    1.0f0 => hex2bytes("fa3f800000"),
     1.1 => hex2bytes("fb3ff199999999999a"),
-    1.5 => hex2bytes("fa3fc00000"),
-    65504.0 => hex2bytes("fa477fe000"),
-    100000.0 => hex2bytes("fa47c35000"),
-    3.4028234663852886e+38 => hex2bytes("fa7f7fffff"),
+    1.5f0 => hex2bytes("fa3fc00000"),
+    65504f0 => hex2bytes("fa477fe000"),
+    100000f0 => hex2bytes("fa47c35000"),
+    Float32(3.4028234663852886e+38) => hex2bytes("fa7f7fffff"),
     1.0e+300 => hex2bytes("fb7e37e43c8800759c"),
-    5.960464477539063e-8 => hex2bytes("fa33800000"),
-    0.00006103515625 => hex2bytes("fa38800000"),
-    -4.0 => hex2bytes("fac0800000"),
+    Float32(5.960464477539063e-8) => hex2bytes("fa33800000"),
+    Float32(0.00006103515625) => hex2bytes("fa38800000"),
+    -4f0 => hex2bytes("fac0800000"),
     -4.1 => hex2bytes("fbc010666666666666"),
 
     false => hex2bytes("f4"),
     true => hex2bytes("f5"),
-    Null() => hex2bytes("f6"),
+    nothing => hex2bytes("f6"),
     Undefined() => hex2bytes("f7"),
-    Simple(16) => hex2bytes("f0"),
-    Simple(24) => hex2bytes("f818"),
-    Simple(255) => hex2bytes("f8ff"),
 
     Tag(0, "2013-03-21T20:04:00Z") =>
         hex2bytes("c074323031332d30332d32315432303a30343a30305a"),
-    Tag(1, 1363896240) => hex2bytes("c11a514b67b0"),
+    Tag(1, SmallInteger(1363896240)) => hex2bytes("c11a514b67b0"),
     Tag(1, 1363896240.5) => hex2bytes("c1fb41d452d9ec200000"),
     Tag(23, hex2bytes("01020304")) => hex2bytes("d74401020304"),
     Tag(24, hex2bytes("6449455446")) => hex2bytes("d818456449455446"),
@@ -66,9 +64,9 @@ two_way_test_vectors = [
     "\u6c34" => hex2bytes("63e6b0b4"),
 
     [] => hex2bytes("80"),
-    [1, 2, 3] => hex2bytes("83010203"),
-    Any[1, [2, 3], [4, 5]] => hex2bytes("8301820203820405"),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25] =>
+    SmallInteger[1, 2, 3] => hex2bytes("83010203"),
+    [SmallInteger(1), SmallInteger[2, 3], SmallInteger[4, 5]] => hex2bytes("8301820203820405"),
+    SmallInteger[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25] =>
         hex2bytes("98190102030405060708090a0b0c0d0e0f101112131415161718181819"),
 
     Dict() => hex2bytes("a0"),
@@ -82,8 +80,15 @@ two_way_test_vectors = [
 
 @testset "two way" begin
     for (data, bytes) in two_way_test_vectors
-        @test isequal(bytes, encode(data))
-        @test isequal(data, decode(bytes))
+        @test data == decode(encode(data))
+        # TODO, Julia's base dict are not ordered, so we can't exactly match
+        # the bytes right now...
+        # OrderedDict's are not in base, so should be serialized as an arbitrary
+        # Julia struct!
+        if !(data isa OrderedDict)
+            @test isequal(bytes, encode(data))
+            @test isequal(data, decode(bytes))
+        end
     end
 end
 
@@ -111,7 +116,7 @@ iana_test_vector = [
 @testset "BigInt iana" begin
     for (data, bytes) in iana_test_vector
         @test isequal(bytes, encode(data))
-        @test isequal(data, decode_with_iana(bytes))
+        @test isequal(data, decode(bytes))
     end
 end
 
@@ -152,3 +157,7 @@ end
         @test isequal(data[2], decode(bytes))
     end
 end
+
+
+using Serialization
+@which deserialize(IOBuffer())
