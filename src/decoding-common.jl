@@ -176,5 +176,12 @@ function decode(io::IO)
     # leave startbyte in io
     first_byte = peekbyte(io)
     typ = first_byte & TYPE_BITS_MASK
-    return decode(io, Val(typ))
+    typ == TYPE_0 && return decode(io, Val(TYPE_0))
+    typ == TYPE_1 && return decode(io, Val(TYPE_1))
+    typ == TYPE_2 && return decode(io, Val(TYPE_2))
+    typ == TYPE_3 && return decode(io, Val(TYPE_3))
+    typ == TYPE_4 && return decode(io, Val(TYPE_4))
+    typ == TYPE_5 && return decode(io, Val(TYPE_5))
+    typ == TYPE_6 && return decode(io, Val(TYPE_6))
+    typ == TYPE_7 && return decode(io, Val(TYPE_7))
 end
