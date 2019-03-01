@@ -44,11 +44,9 @@ export encode
 export decode, decode_with_iana
 export Simple, Null, Undefined
 
-function decode(cbor_bytes::Array{UInt8, 1})
-    data, _ = decode_next(1, cbor_bytes, true)
-    return data
+function decode(data::Array{UInt8, 1})
+    return decode(IOBuffer(data))
 end
-
 
 function encode(data)
     io = IOBuffer()

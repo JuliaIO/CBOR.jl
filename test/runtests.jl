@@ -5,7 +5,6 @@ import CBOR: Tag, decode, encode, SmallInteger
 # Taken (and modified) from Appendix A of RFC 7049
 
 
-
 two_way_test_vectors = [
     SmallInteger(0) => hex2bytes("00"),
     SmallInteger(1) => hex2bytes("01"),
@@ -78,6 +77,8 @@ two_way_test_vectors = [
     ["a", Dict("b"=>"c")] => hex2bytes("826161a161626163")
 ]
 
+decode(encode(0f0))
+
 @testset "two way" begin
     for (data, bytes) in two_way_test_vectors
         @test data == decode(encode(data))
@@ -144,20 +145,16 @@ function map_producer(c::Channel)
         put!(c::Channel,v)
     end
 end
-@testset "ifndef length collections" begin
-    for (data, bytes) in indef_length_coll_test_vectors
-        global coll
-        coll = data[1]
-        task = if data[3] <: AbstractDict
-            Channel(map_producer)
-        else
-            Channel(list_producer)
-        end
-        @test isequal(bytes, encode(Tag(task, data[3])))
-        @test isequal(data[2], decode(bytes))
-    end
-end
-
-
-using Serialization
-@which deserialize(IOBuffer())
+# @testset "ifndef length collections" begin
+#     for (data, bytes) in indef_length_coll_test_vectors
+#         global coll
+#         coll = data[1]
+#         task = if data[3] <: AbstractDict
+#             Channel(map_producer)
+#         else
+#             Channel(list_producer)
+#         end
+#         @test isequal(bytes, encode(Tag(task, data[3])))
+#         @test isequal(data[2], decode(bytes))
+#     end
+# end
