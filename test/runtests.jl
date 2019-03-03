@@ -69,27 +69,43 @@ two_way_test_vectors = [
         hex2bytes("98190102030405060708090a0b0c0d0e0f101112131415161718181819"),
 
     Dict() => hex2bytes("a0"),
-    OrderedDict(1=>2, 3=>4) => hex2bytes("a201020304"),
-    OrderedDict("a"=>1, "b"=>[2, 3]) => hex2bytes("a26161016162820203"),
+    OrderedDict(SmallInteger(1)=>SmallInteger(2), SmallInteger(3)=>SmallInteger(4)) => hex2bytes("a201020304"),
+    OrderedDict("a"=>SmallInteger(1), "b"=>SmallInteger[2, 3]) => hex2bytes("a26161016162820203"),
     OrderedDict("a"=>"A", "b"=>"B", "c"=>"C", "d"=>"D", "e"=>"E") =>
         hex2bytes("a56161614161626142616361436164614461656145"),
 
     ["a", Dict("b"=>"c")] => hex2bytes("826161a161626163")
 ]
 
-decode(encode(0f0))
+#=
+The problem is, we want to preserver Julia types for non Base types that directly
+map to basic CBOR protocol types. So we can't define encode(io::IO, x::AbstractDict)
+since that would mean we can't preserver the type of any custom dict type.
+But, since the CBOR protocol is expecting ordered dicts, Julia's default dict type
+is unordered. I think it still makes more sense to use Julia's dict type instead of
+taking the dependencies on DataStructures. But to pass the byte test, we need
+an ordered dict type, so we overload it just here!
+=#
+function CBOR.encode(io::IO, x::OrderedDict)
+    CBOR.encode_length(io::IO, CBOR.TYPE_5, x)
+    for (key, value) in x
+        encode(io, key)
+        encode(io, value)
+    end
+end
+function CBOR.decode(io::IO, ::Val{CBOR.TYPE_5})
+    return OrderedDict(CBOR.decode_ntimes(io) do io
+        decode(io) => decode(io)
+    end...)
+end
+
+decode(encode(SmallInteger(0)))
 
 @testset "two way" begin
     for (data, bytes) in two_way_test_vectors
         @test data == decode(encode(data))
-        # TODO, Julia's base dict are not ordered, so we can't exactly match
-        # the bytes right now...
-        # OrderedDict's are not in base, so should be serialized as an arbitrary
-        # Julia struct!
-        if !(data isa OrderedDict)
-            @test isequal(bytes, encode(data))
-            @test isequal(data, decode(bytes))
-        end
+        @test isequal(bytes, encode(data))
+        @test isequal(data, decode(bytes))
     end
 end
 

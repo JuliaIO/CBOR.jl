@@ -36,9 +36,8 @@ function encode_unsigned_with_type(
     write(io, bswap(num))
 end
 
-
-function encode_smallest_int(io::IO, typ::UInt8, x)
-    encode_smallest_int(io, typ, length(x))
+function encode_length(io::IO, typ::UInt8, x)
+    encode_smallest_int(io, typ, x isa String ? sizeof(x) : length(x))
 end
 
 """
@@ -84,24 +83,24 @@ function encode(io::IO, num::T) where T <: Signed
 end
 
 function encode(io::IO, byte_string::Vector{UInt8})
-    encode_smallest_int(io, TYPE_2, byte_string)
+    encode_length(io, TYPE_2, byte_string)
     write(io, byte_string)
 end
 
 function encode(io::IO, string::String)
-    encode_smallest_int(io, TYPE_3, sizeof(string))
+    encode_length(io, TYPE_3, string)
     write(io, string)
 end
 
 function encode(io::IO, list::Vector)
-    encode_smallest_int(io, TYPE_4, list)
+    encode_length(io, TYPE_4, list)
     for e in list
         encode(io, e)
     end
 end
 
 function encode(io::IO, map::Dict)
-    encode_smallest_int(io, TYPE_5, map)
+    encode_length(io, TYPE_5, map)
     for (key, value) in map
         encode(io, key)
         encode(io, value)
