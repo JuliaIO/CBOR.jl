@@ -1,7 +1,8 @@
 using Test
 using CBOR
 using DataStructures
-import CBOR: Tag, decode, encode, SmallInteger
+import CBOR: Tag, decode, encode, SmallInteger, UndefLength
+
 # Taken (and modified) from Appendix A of RFC 7049
 
 
@@ -77,6 +78,22 @@ two_way_test_vectors = [
     ["a", Dict("b"=>"c")] => hex2bytes("826161a161626163")
 ]
 
+
+# Some annoying problems with Small integers and indefinite lenght arrays
+# for round tripping
+cbor_equal(a, b) = a == b
+cbor_equal(a::Vector{String}, b::String) = join(a, "") == b
+cbor_equal(a::Vector{Vector{UInt8}}, b::Vector{UInt8}) = vcat(a...) == b
+function cbor_equal(a::AbstractDict, b::AbstractDict)
+    for (ka, kb) in zip(keys(a), keys(b))
+        ka == kb || return false
+    end
+    for (ka, kb) in zip(values(a), values(b))
+        ka == kb || return false
+    end
+    return true
+end
+
 #=
 The problem is, we want to preserver Julia types for non Base types that directly
 map to basic CBOR protocol types. So we can't define encode(io::IO, x::AbstractDict)
@@ -86,6 +103,7 @@ is unordered. I think it still makes more sense to use Julia's dict type instead
 taking the dependencies on DataStructures. But to pass the byte test, we need
 an ordered dict type, so we overload it just here!
 =#
+
 function CBOR.encode(io::IO, x::OrderedDict)
     CBOR.encode_length(io::IO, CBOR.TYPE_5, x)
     for (key, value) in x
@@ -99,13 +117,12 @@ function CBOR.decode(io::IO, ::Val{CBOR.TYPE_5})
     end...)
 end
 
-decode(encode(SmallInteger(0)))
 
 @testset "two way" begin
     for (data, bytes) in two_way_test_vectors
-        @test data == decode(encode(data))
+        @test cbor_equal(data, decode(encode(data)))
         @test isequal(bytes, encode(data))
-        @test isequal(data, decode(bytes))
+        @test cbor_equal(data, decode(bytes))
     end
 end
 
@@ -137,40 +154,83 @@ iana_test_vector = [
     end
 end
 
+
 indef_length_coll_test_vectors = [
-    Any[["Hello", " ", "world"], "Hello world", String] =>
+    ["Hello", " ", "world"] =>
         hex2bytes("7f6548656c6c6f612065776f726c64ff"),
-    Any[b"Hello world", b"Hello world", Array{UInt8, 1}] =>
-        hex2bytes("5f18481865186c186c186f18201877186f1872186c1864ff"),
-    Any[[1, 2.3, "Twiddle"], [1, 2.3, "Twiddle"], AbstractVector] =>
+    Vector{UInt8}.(["Hello", " ", "world"]) =>
+        hex2bytes("5f4548656c6c6f412045776f726c64ff"),
+
+    [SmallInteger(1), 2.3, "Twiddle"] =>
         hex2bytes("9f01fb40026666666666666754776964646c65ff"),
-    Any[OrderedDict(1=>2, 3.2=>"3.2"), OrderedDict(1=>2, 3.2=>"3.2"),
-        AbstractDict] => hex2bytes("bf0102fb400999999999999a63332e32ff")
+
+    OrderedDict(SmallInteger(1)=>SmallInteger(2), 3.2=>"3.2") =>
+        hex2bytes("bf0102fb400999999999999a63332e32ff")
 ]
 
-coll = []
 
-function list_producer(c::Channel)
-    for e in coll
-        put!(c::Channel,e)
+
+@testset "ifndef length collections" begin
+    @testset "basic types" begin
+        @test UInt8[1] == decode(encode(UndefLength(UInt8[1])))
+        @test "hi" == decode(encode("hi"))
+        @test [1, "2", UInt8[1]] == decode(encode([1, "2", UInt8[1]]))
+        @test Dict("a" => 2) == decode(encode(Dict("a" => 2)))
+    end
+
+    for (data, bytes) in indef_length_coll_test_vectors
+        @test isequal(bytes, encode(UndefLength(data)))
+        @test cbor_equal(data, decode(bytes))
     end
 end
-function map_producer(c::Channel)
-    for (k, v) in coll
-        put!(c::Channel,k)
-        put!(c::Channel,v)
+
+#=
+From the docs about undef length byte strings
+5F              -- Start indefinite-length byte string
+     44           -- Byte string of length 4
+        aabbccdd  -- Bytes content
+     43           -- Byte string of length 3
+        eeff99    -- Bytes content
+     FF           -- "break"
+
+  After decoding, this results in a single byte string with seven
+  bytes: 0xaabbccddeeff99.
+=#
+@testset "undef length bytestring" begin
+    @test decode(hex2bytes("5f44aabbccdd43eeff99FF")) == hex2bytes("aabbccddeeff99")
+end
+
+# tests from the readme
+function producer(ch::Channel)
+    for i in 1:10
+        put!(ch,i*i)
     end
 end
-# @testset "ifndef length collections" begin
-#     for (data, bytes) in indef_length_coll_test_vectors
-#         global coll
-#         coll = data[1]
-#         task = if data[3] <: AbstractDict
-#             Channel(map_producer)
-#         else
-#             Channel(list_producer)
-#         end
-#         @test isequal(bytes, encode(Tag(task, data[3])))
-#         @test isequal(data[2], decode(bytes))
-#     end
-# end
+@testset "indefinite length readme" begin
+    iter = Channel(producer)
+
+    @test ((1:10) .* (1:10)) == decode(encode(UndefLength(iter)))
+end
+
+function cubes(ch::Channel)
+    for i in 1:10
+        put!(ch,i)       # key
+        put!(ch,i*i*i)   # value
+    end
+end
+
+@testset "indefinite length readme Dict" begin
+    bytes = encode(UndefLength{Pair}(Channel(cubes)))
+    @test Dict(zip(1:10, (1:10) .^ 3)) == decode(bytes)
+end
+
+function producer(ch::Channel)
+    for c in ["F", "ire", " ", "and", " ", "Blo", "od"]
+        put!(ch, c)
+    end
+end
+
+@testset "indefinite length readme String" begin
+    bytes = encode(UndefLength{String}(Channel(producer)))
+    @test decode(bytes) == "Fire and Blood"
+end

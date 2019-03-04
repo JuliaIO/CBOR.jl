@@ -32,19 +32,21 @@ function peekbyte(io::IO)
 end
 
 struct UndefIter{IO, F}
+    f::F
     io::IO
-    x::F
 end
+Base.IteratorSize(::Type{<: UndefIter}) = Base.SizeUnknown()
 
-function Base.iterate(x::UndefIter, state = 1)
+function Base.iterate(x::UndefIter, state = nothing)
     peekbyte(x.io) == BREAK_INDEF && return nothing
-    return x.f(x.io), state
+    return x.f(x.io), nothing
 end
 
 function decode_ntimes(f, io::IO)
     first_byte = peekbyte(io)
     if (first_byte & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
-        return UndefIter(io, f)
+        skip(io, 1) # skip first byte
+        return UndefIter(f, io)
     else
         return (f(io) for i in 1:decode_unsigned(io))
     end
@@ -85,7 +87,12 @@ Decode Byte Array
 """
 function decode(io::IO, ::Val{TYPE_2})
     if (peekbyte(io) & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
-        return readuntil(io, BREAK_INDEF)
+        skip(io, 1)
+        result = IOBuffer()
+        while peekbyte(io) !== BREAK_INDEF
+            write(result, decode(io))
+        end
+        return take!(result)
     else
         return read(io, decode_unsigned(io))
     end
@@ -94,13 +101,24 @@ end
 """
 Decode String
 """
-decode(io::IO, ::Val{TYPE_3}) = String(decode(io, Val(TYPE_2)))
+function decode(io::IO, ::Val{TYPE_3})
+    if (peekbyte(io) & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
+        skip(io, 1)
+        result = IOBuffer()
+        while peekbyte(io) !== BREAK_INDEF
+            write(result, decode(io))
+        end
+        return String(take!(result))
+    else
+        return String(read(io, decode_unsigned(io)))
+    end
+end
 
 """
 Decode Vector of arbitrary elements
 """
 function decode(io::IO, ::Val{TYPE_4})
-    return collect(decode_ntimes(decode, io))
+    return map(identity, decode_ntimes(decode, io))
 end
 
 """

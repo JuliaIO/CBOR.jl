@@ -122,40 +122,48 @@ function encode(io::IO, big_int::BigInt)
 end
 
 function encode(io::IO, tag::Tag)
-    if typeof(tag.id) <: Integer && tag.id >= 0
-        encode_with_tag(io, Unsigned(tag.id), tag.data)
-    else # typeof(tag.id) <: Channel Must be Channel, since it's Union{Int, Channel}
-        encode_indef_length_collection(io, tag.id, tag.data)
-    end
+    tag.id >= 0 || error("Tag needs to be a positive integer")
+    encode_with_tag(io, Unsigned(tag.id), tag.data)
 end
 
+"""
+Wrapper for collections with undefined length, that will then get encoded
+in the cbor format. Underlying is just
+"""
+struct UndefLength{ET, A}
+    iter::A
+end
+
+function UndefLength(iter::T) where T
+    UndefLength{eltype(iter), T}(iter)
+end
+
+function UndefLength{T}(iter::A) where {T, A}
+    UndefLength{T, A}(iter)
+end
+
+Base.iterate(x::UndefLength) = iterate(x.iter)
+Base.iterate(x::UndefLength, state) = iterate(x.iter, state)
 
 # ------- encoding for indefinite length collections
-function encode_indef_length_collection(
-        io::IO, producer::Channel, collection_type
-    )
-    if collection_type <: AbstractVector{UInt8}
-        typ = TYPE_2
-    elseif collection_type <: String
-        typ = TYPE_3
-    elseif collection_type <: Union{AbstractVector, Tuple}
-        typ = TYPE_4
-    elseif collection_type <: AbstractDict
-        typ = TYPE_5
+function encode(
+        io::IO, iter::UndefLength{ET}
+    ) where ET
+    if ET in (Vector{UInt8}, String)
+        typ = ET == Vector{UInt8} ? TYPE_2 : TYPE_3
+        write(io, typ | ADDNTL_INFO_INDEF)
+        foreach(x-> encode(io, x), iter)
     else
-        error(@sprintf "Collection type %s is not supported for indefinite length encoding." collection_type)
-    end
-
-    write(io, typ | ADDNTL_INFO_INDEF)
-
-    count = 0
-    for e in producer
-        encode(io, e)
-        count += 1
-    end
-
-    if typ == TYPE_5 && isodd(count)
-        error(@sprintf "Collection type %s requires an even number of input data items in order to be consistent." collection_type)
+        typ = ET <: Pair ? TYPE_5 : TYPE_4 # Dict or any array
+        write(io, typ | ADDNTL_INFO_INDEF)
+        for e in iter
+            if e isa Pair
+                encode(io, e[1])
+                encode(io, e[2])
+            else
+                encode(io, e)
+            end
+        end
     end
     write(io, BREAK_INDEF)
 end

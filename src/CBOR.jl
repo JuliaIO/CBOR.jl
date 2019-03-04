@@ -29,16 +29,16 @@ num2hex(n::AbstractFloat) = num2hex(reinterpret(Unsigned, n))
 hex2num(s) = reinterpret(Float64, parse(UInt64, s, base = 16))
 hex(n) = string(n, base = 16)
 
-struct Tag{ID <: Union{Channel, Int}, T}
-    id::ID
+struct Tag{T}
+    id::Int
     data::T
 end
 Base.:(==)(a::Tag, b::Tag) = a.id == b.id && a.data == b.data
 Tag(id::Integer, data) = Tag(Int(id), data)
 
 include("constants.jl")
-include("encoding-common.jl")
-include("decoding-common.jl")
+include("encode.jl")
+include("decode.jl")
 
 export encode
 export decode, decode_with_iana
