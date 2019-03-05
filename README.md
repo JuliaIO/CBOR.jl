@@ -127,7 +127,7 @@ are encoded as CBOR `Type 4`
 
 #### Maps
 
-An `Associative` type is encoded as CBOR `Type 5`
+An `AbstractDict` type is encoded as CBOR `Type 5`
 
 ```julia
 > d = Dict()
@@ -145,11 +145,11 @@ Dict{Any,Any} with 2 entries:
 
 #### Tagging
 
-To *tag* one of the above types, encode a `Pair` with `first` being an
+To *tag* one of the above types, encode a `Tag` with `first` being an
 **non-negative** integer, and `second` being the data you want to tag.
 
 ```julia
-> bytes = encode(Pair(80, "web servers"))
+> bytes = encode(Tag(80, "web servers"))
 
 > data = decode(bytes)
 0x50=>"HTTP Web Server"
@@ -226,60 +226,56 @@ The `Dict` is then encoded as CBOR `Type 5`.
 
 #### Indefinite length collections
 
-To encode collections of *indefinite* length, first create a *producer*
-function
+To encode collections of *indefinite* length, you can just wrap any iterator
+in the `CBOR.UndefLength` type. Make sure that your Iterator knows their eltype
+to e.g. create a bytestring / string / Dict *indefinite* length encoding.
+The eltype mapping is:
 
+```julia
+Vector{UInt8} -> bytestring
+String -> bytestring
+Pair -> Dict
+Any -> List
+```
+If the eltype is unknown, but you still want to enforce it, use this constructor:
+```Julia
+CBOR.UndefLength{String}(iter)
+```
+First create some julia iterator with unknown length
 ```julia
 function producer(ch::Channel)
     for i in 1:10
         put!(ch,i*i)
     end
 end
+iter = Channel(producer)
 ```
 
-Wrap it in a `Channel`
-
+encode it with UndefLength
 ```julia
-task = Channel(producer)
-```
-
-Encode a `Pair` with `first` being the `Channel` just created, and `second` being
-a valid collection type you want to encode.
-
-```julia
-> encode(Pair(task, AbstractVector))
+> encode(UndefLength(iter))
 18-element Array{UInt8, 1}: 0x9f 0x01 0x04 0x09 0x10 ... 0x18 0x51 0x18 0x64 0xff
 
 > decode(bytes)
-10-element Array{Any, 1}: 1 4 9 16 25 36 49 64 81 100
+[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
 ```
 
 While encoding an indefinite length `Map`, produce first the key and then the
-value for each key-value pair.
+value for each key-value pair, or produce pairs!
 
 ```julia
 function cubes(ch::Channel)
     for i in 1:10
-        put!(ch,i)       # key
-        put!(ch,i*i*i)   # value
+        put!(ch, i)       # key
+        put!(ch, i*i*i)   # value
     end
 end
 
-> bytes = encode(Pair(Channel(cubes), Associative))
+> bytes = encode(UndefLength{Pair}(Channel(cubes)))
 34-element Array{UInt8, 1}: 0xbf 0x01 0x01 0x02 0x08 ... 0x0a 0x19 0x03 0xe8 0xff
 
 > decode(bytes)
-Dict{Any, Any} with 10 entries:
-  0x07 => 0x0157
-  0x04 => 0x40
-  0x09 => 0x02d9
-  0x0a => 0x03e8
-  0x02 => 0x08
-  0x03 => 0x1b
-  0x05 => 0x7d
-  0x08 => 0x0200
-  0x06 => 0xd8
-  0x01 => 0x01s
+Dict(7=>343,4=>64,9=>729,10=>1000,2=>8,3=>27,5=>125,8=>512,6=>216,1=>1)
 ```
 
 Note that when an indefinite length CBOR `Type 2` or `Type 3` is decoded,
@@ -292,7 +288,7 @@ function producer(ch::Channel)
     end
 end
 
-> bytes = encode(Pair(Channel(producer), String))
+> bytes = encode(UndefLength{String}(Channel(producer)))
 23-element Array{UInt8, 1}: 0x7f 0x61 0x46 0x63 0x69 ... 0x6f 0x62 0x6f 0x64 0xff
 
 > decode(bytes)
@@ -301,12 +297,7 @@ end
 
 ### Caveats
 
-While encoding a `Float16` is supported, decoding one isn't.
 
 Encoding a `UInt128` and an `Int128` isn't supported; use a `BigInt` instead.
-
-The CBOR array type is always decoded as a `Vector`.
-
-The CBOR map type is always decoded as a `Dict`.
 
 Decoding CBOR data that isn't well-formed is unpredictable.

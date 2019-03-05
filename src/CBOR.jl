@@ -22,29 +22,36 @@ THE SOFTWARE.
 
 module CBOR
 
+using Printf, Serialization, Base64
+
+num2hex(n) = string(n, base = 16, pad = sizeof(n) * 2)
+num2hex(n::AbstractFloat) = num2hex(reinterpret(Unsigned, n))
+hex2num(s) = reinterpret(Float64, parse(UInt64, s, base = 16))
+hex(n) = string(n, base = 16)
+
+struct Tag{T}
+    id::Int
+    data::T
+end
+Base.:(==)(a::Tag, b::Tag) = a.id == b.id && a.data == b.data
+Tag(id::Integer, data) = Tag(Int(id), data)
+
 include("constants.jl")
-include("encoding-common.jl")
-include("decoding-common.jl")
+include("encode.jl")
+include("decode.jl")
 
 export encode
 export decode, decode_with_iana
 export Simple, Null, Undefined
 
-function decode(cbor_bytes::Array{UInt8, 1})
-    data, _ = decode_next(1, cbor_bytes, false)
-    return data
-end
-
-function decode_with_iana(cbor_bytes::Array{UInt8, 1})
-    warn("Results from decode_with_iana may change in the future.")
-    data, _ = decode_next(1, cbor_bytes, true)
-    return data
+function decode(data::Array{UInt8, 1})
+    return decode(IOBuffer(data))
 end
 
 function encode(data)
-    bytes = UInt8[]
-    encode(data, bytes)
-    return bytes
+    io = IOBuffer()
+    encode(io, data)
+    return take!(io)
 end
 
 end
