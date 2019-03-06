@@ -36,6 +36,34 @@ end
 Base.:(==)(a::Tag, b::Tag) = a.id == b.id && a.data == b.data
 Tag(id::Integer, data) = Tag(Int(id), data)
 
+struct Decoder{IOType}
+    io::IOType
+    reference_cache::Vector{Any}
+end
+Decoder(io::IOType) where IOType <: IO = Decoder{IOType}(io, [])
+
+Base.read(io::Decoder, T::Type) = read(io.io, T)
+Base.read(io::Decoder, n::Integer) = read(io.io, n)
+Base.skip(io::Decoder, amount) = read(io.io, amount)
+
+struct Encoder{IOType}
+    io::IOType
+    encode_references::Bool
+    references::IdDict{Any, Int}
+end
+Base.write(io::Encoder, data) = write(io.io, data)
+
+function Encoder(io::IOType, encode_references = false) where IOType <: IO
+    Encoder{IOType}(io, encode_references, IdDict{Any, Int}())
+end
+
+"""
+A CBOR reference for CBOR Reference types (Tag 28/29)
+"""
+struct Reference
+    index::Int
+end
+
 include("constants.jl")
 include("encode.jl")
 include("decode.jl")
@@ -44,14 +72,41 @@ export encode
 export decode, decode_with_iana
 export Simple, Null, Undefined
 
-function decode(data::Array{UInt8, 1})
+replace_references!(refs, x) = x
+replace_references!(refs, x::Reference) = refs[x.index]
+replace_references!(refs, x::Vector) = map!(x-> replace_references!(refs, x), x, x)
+
+function replace_references!(refs, dict::Dict)
+    for (k, v) in dict
+        if k isa Reference
+            delete!(dict, k)
+            k = replace_references!(refs, k)
+        end
+        dict[k] = replace_references!(refs, v)
+    end
+    dict
+end
+
+
+function decode(data::Vector{UInt8})
     return decode(IOBuffer(data))
 end
 
-function encode(data)
+function decode(io::IO)
+    dio = Decoder(io)
+    data = decode(dio)
+    return replace_references!(dio.reference_cache, data)
+end
+
+
+function encode(data; with_references = false)
     io = IOBuffer()
-    encode(io, data)
+    encode(io, data; with_references = with_references)
     return take!(io)
+end
+
+function encode(io::IO, data; with_references = false)
+    encode(Encoder(io, with_references), data)
 end
 
 end

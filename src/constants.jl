@@ -52,3 +52,9 @@ const CBOR_UNDEF_BYTE = UInt8(TYPE_7 | 23)
 
 
 const CUSTOM_LANGUAGE_TYPE = 27
+
+# 28 	Mark shared value
+const MARK_SHARED_VALUE = 28
+
+# 29 	Reference shared value
+const REFERENCE_SHARED_VALUE = 29
