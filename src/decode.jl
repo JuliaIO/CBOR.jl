@@ -24,16 +24,16 @@ function type_from_fields(::Type{T}, fields) where T
     ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), T, fields, length(fields))
 end
 
-function peekbyte(io::IO)
-    mark(io)
+function peekbyte(io::Decoder)
+    mark(io.io)
     byte = read(io, UInt8)
-    reset(io)
+    reset(io.io)
     return byte
 end
 
-struct UndefIter{IO, F}
+struct UndefIter{Decoder, F}
     f::F
-    io::IO
+    io::Decoder
 end
 Base.IteratorSize(::Type{<: UndefIter}) = Base.SizeUnknown()
 
@@ -42,7 +42,7 @@ function Base.iterate(x::UndefIter, state = nothing)
     return x.f(x.io), nothing
 end
 
-function decode_ntimes(f, io::IO)
+function decode_ntimes(f, io::Decoder)
     first_byte = peekbyte(io)
     if (first_byte & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
         skip(io, 1) # skip first byte
@@ -52,7 +52,7 @@ function decode_ntimes(f, io::IO)
     end
 end
 
-function decode_unsigned(io::IO)
+function decode_unsigned(io::Decoder)
     addntl_info = read(io, UInt8) & ADDNTL_INFO_MASK
     if addntl_info < SINGLE_BYTE_UINT_PLUS_ONE
         return addntl_info
@@ -71,9 +71,9 @@ end
 
 
 
-decode(io::IO, ::Val{TYPE_0}) = decode_unsigned(io)
+decode(io::Decoder, ::Val{TYPE_0}) = decode_unsigned(io)
 
-function decode(io::IO, ::Val{TYPE_1})
+function decode(io::Decoder, ::Val{TYPE_1})
     data = signed(decode_unsigned(io))
     if (i = Int128(data) + one(data)) > typemax(Int64)
         return -i
@@ -85,7 +85,7 @@ end
 """
 Decode Byte Array
 """
-function decode(io::IO, ::Val{TYPE_2})
+function decode(io::Decoder, ::Val{TYPE_2})
     if (peekbyte(io) & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
         skip(io, 1)
         result = IOBuffer()
@@ -101,7 +101,7 @@ end
 """
 Decode String
 """
-function decode(io::IO, ::Val{TYPE_3})
+function decode(io::Decoder, ::Val{TYPE_3})
     if (peekbyte(io) & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
         skip(io, 1)
         result = IOBuffer()
@@ -117,23 +117,24 @@ end
 """
 Decode Vector of arbitrary elements
 """
-function decode(io::IO, ::Val{TYPE_4})
+function decode(io::Decoder, ::Val{TYPE_4})
     return map(identity, decode_ntimes(decode, io))
 end
 
 """
 Decode Dict
 """
-function decode(io::IO, ::Val{TYPE_5})
+function decode(io::Decoder, ::Val{TYPE_5})
     return Dict(decode_ntimes(io) do io
         decode(io) => decode(io)
     end)
 end
 
+
 """
 Decode Tagged type
 """
-function decode(io::IO, ::Val{TYPE_6})
+function decode(io::Decoder, ::Val{TYPE_6})
     tag = decode_unsigned(io)
     data = decode(io)
     if tag in (POS_BIG_INT_TAG, NEG_BIG_INT_TAG)
@@ -145,7 +146,20 @@ function decode(io::IO, ::Val{TYPE_6})
         end
         return big_int
     end
-
+    if tag == MARK_SHARED_VALUE
+        push!(io.reference_cache, data)
+        return data
+    end
+    if tag == REFERENCE_SHARED_VALUE
+        if checkbounds(Bool, io.reference_cache, data + 1)
+            # if the index is in bounds, we already know the referenced object
+            # and can immediately return it
+            return io.reference_cache[data + 1]
+        else
+            # The reference points to an object that isn't constructed yet
+            return Reference(data + 1)
+        end
+    end
     if tag == CUSTOM_LANGUAGE_TYPE # Type Tag
         name = data[1]
         object_serialized = data[2]
@@ -157,7 +171,7 @@ function decode(io::IO, ::Val{TYPE_6})
     return Tag(tag, data)
 end
 
-function decode(io::IO, ::Val{TYPE_7})
+function decode(io::Decoder, ::Val{TYPE_7})
     first_byte = read(io, UInt8)
     addntl_info = first_byte & ADDNTL_INFO_MASK
     if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
@@ -190,7 +204,7 @@ function decode(io::IO, ::Val{TYPE_7})
     end
 end
 
-function decode(io::IO)
+function decode(io::Decoder)
     # leave startbyte in io
     first_byte = peekbyte(io)
     typ = first_byte & TYPE_BITS_MASK

@@ -5,6 +5,14 @@ import CBOR: Tag, decode, encode, SmallInteger, UndefLength
 
 # Taken (and modified) from Appendix A of RFC 7049
 
+@testset "cyclic references" begin
+    x = Dict{Any, Any}("a" => 22)
+    x["b"] = x;
+
+    y = decode(encode(x, with_references = true));
+    @test y["b"] === y
+    @test y["a"] === 22
+end
 
 two_way_test_vectors = [
     SmallInteger(0) => hex2bytes("00"),

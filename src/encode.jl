@@ -30,13 +30,13 @@ cbor_tag(::Float32) = ADDNTL_INFO_FLOAT32
 cbor_tag(::Float16) = ADDNTL_INFO_FLOAT16
 
 function encode_unsigned_with_type(
-        io::IO, typ::UInt8, num::Unsigned
+        io::Encoder, typ::UInt8, num::Unsigned
     )
     write(io, typ | cbor_tag(num))
     write(io, bswap(num))
 end
 
-function encode_length(io::IO, typ::UInt8, x)
+function encode_length(io::Encoder, typ::UInt8, x)
     encode_smallest_int(io, typ, x isa String ? sizeof(x) : length(x))
 end
 
@@ -44,7 +44,7 @@ end
 Array lengths and other integers (e.g. tags) in CBOR are encoded with smallest integer type,
 which we do with this method!
 """
-function encode_smallest_int(io::IO, typ::UInt8, num::Integer)
+function encode_smallest_int(io::Encoder, typ::UInt8, num::Integer)
     @assert num >= 0 "array lengths must be greater 0. Found: $num"
     if num < SINGLE_BYTE_UINT_PLUS_ONE
         write(io, typ | UInt8(num)) # smaller 24 gets directly stored in type tag
@@ -62,7 +62,7 @@ function encode_smallest_int(io::IO, typ::UInt8, num::Integer)
 end
 
 
-function encode(io::IO, float::Union{Float64, Float32, Float16})
+function encode_direct(io::Encoder, float::Union{Float64, Float32, Float16})
     write(io, TYPE_7 | cbor_tag(float))
     # hton only works for 32 + 64, while bswap works for all
     write(io, Base.bswap_int(float))
@@ -70,36 +70,36 @@ end
 
 
 # ------- straightforward encoding for a few Julia types
-function encode(io::IO, bool::Bool)
+function encode_direct(io::Encoder, bool::Bool)
     write(io, CBOR_FALSE_BYTE + bool)
 end
 
-function encode(io::IO, num::Unsigned)
+function encode_direct(io::Encoder, num::Unsigned)
     encode_unsigned_with_type(io, TYPE_0, num)
 end
 
-function encode(io::IO, num::T) where T <: Signed
+function encode_direct(io::Encoder, num::T) where T <: Signed
     encode_unsigned_with_type(io, TYPE_1, unsigned(-num - one(T)))
 end
 
-function encode(io::IO, byte_string::Vector{UInt8})
+function encode_direct(io::Encoder, byte_string::Vector{UInt8})
     encode_length(io, TYPE_2, byte_string)
     write(io, byte_string)
 end
 
-function encode(io::IO, string::String)
+function encode_direct(io::Encoder, string::String)
     encode_length(io, TYPE_3, string)
     write(io, string)
 end
 
-function encode(io::IO, list::Vector)
+function encode_direct(io::Encoder, list::Vector)
     encode_length(io, TYPE_4, list)
     for e in list
         encode(io, e)
     end
 end
 
-function encode(io::IO, map::Dict)
+function encode_direct(io::Encoder, map::Dict)
     encode_length(io, TYPE_5, map)
     for (key, value) in map
         encode(io, key)
@@ -107,7 +107,7 @@ function encode(io::IO, map::Dict)
     end
 end
 
-function encode(io::IO, big_int::BigInt)
+function encode_direct(io::Encoder, big_int::BigInt)
     tag = if big_int < 0
         big_int = -big_int - 1
         NEG_BIG_INT_TAG
@@ -118,10 +118,10 @@ function encode(io::IO, big_int::BigInt)
     if isodd(length(hex_str))
         hex_str = "0" * hex_str
     end
-    encode(io, Tag(tag, hex2bytes(hex_str)))
+    encode_direct(io, Tag(tag, hex2bytes(hex_str)))
 end
 
-function encode(io::IO, tag::Tag)
+function encode_direct(io::Encoder, tag::Tag)
     tag.id >= 0 || error("Tag needs to be a positive integer")
     encode_with_tag(io, Unsigned(tag.id), tag.data)
 end
@@ -146,8 +146,8 @@ Base.iterate(x::UndefLength) = iterate(x.iter)
 Base.iterate(x::UndefLength, state) = iterate(x.iter, state)
 
 # ------- encoding for indefinite length collections
-function encode(
-        io::IO, iter::UndefLength{ET}
+function encode_direct(
+        io::Encoder, iter::UndefLength{ET}
     ) where ET
     if ET in (Vector{UInt8}, String)
         typ = ET == Vector{UInt8} ? TYPE_2 : TYPE_3
@@ -170,20 +170,20 @@ end
 
 # ------- encoding with tags
 
-function encode_with_tag(io::IO, tag::Unsigned, data)
+function encode_with_tag(io::Encoder, tag::Unsigned, data)
     encode_smallest_int(io, TYPE_6, tag)
-    encode(io, data)
+    encode_direct(io, data)
 end
 
 
 struct Undefined
 end
 
-function encode(io::IO, null::Nothing)
+function encode_direct(io::Encoder, null::Nothing)
     write(io, CBOR_NULL_BYTE)
 end
 
-function encode(io::IO, undef::Undefined)
+function encode_direct(io::Encoder, undef::Undefined)
     write(io, CBOR_UNDEF_BYTE)
 end
 
@@ -196,10 +196,10 @@ Base.:(==)(a::SmallInteger, b::SmallInteger) = a.num == b.num
 Base.:(==)(a::Number, b::SmallInteger) = a == b.num
 Base.:(==)(a::SmallInteger, b::Number) = a.num == b
 
-function encode(io::IO, small::SmallInteger{<: Unsigned})
+function encode_direct(io::Encoder, small::SmallInteger{<: Unsigned})
     encode_smallest_int(io, TYPE_0, small.num)
 end
-function encode(io::IO, small::SmallInteger{<: Signed})
+function encode_direct(io::Encoder, small::SmallInteger{<: Signed})
     if small.num >= 0
         encode_smallest_int(io, TYPE_0, unsigned(small.num))
     else
@@ -221,17 +221,35 @@ Semantics       Serialised language-independent object with type name and constr
 Reference       http://cbor.schmorp.de/generic-object
 Contact         Marc A. Lehmann <cbor@schmorp.de>
 """
-function encode(io::IO, struct_type::T) where T
+function encode_direct(io::Encoder, struct_type::T) where T
     # TODO don't use Serialization for the whole struct!
     # It almost works to deserialize from just the fields and type,
     # but that ends up being problematic for
     # anonymous functions (the type changes between serialization & deserialization)
     tio = IOBuffer(); serialize(tio, struct_type)
-    encode(
+    encode_direct(
         io,
         Tag(
             CUSTOM_LANGUAGE_TYPE,
             [string("Julia/", T), take!(tio), fields2array(struct_type)]
         )
     )
+end
+
+
+function encode(io::Encoder, value)
+    # If we don't encode_direct with references, no marking needed
+    io.encode_references || return encode_direct(io, value)
+    # Isbits can't be referenced (value type)
+    isbits(value) && return encode_direct(io, value)
+    (value isa String) && return encode_direct(io, value)
+
+    if haskey(io.references, value)
+        index = io.references[value]
+        return encode_direct(io, Tag(REFERENCE_SHARED_VALUE, index))
+    else
+        index = length(io.references)
+        io.references[value] = index
+        return encode_direct(io, Tag(MARK_SHARED_VALUE, value))
+    end
 end
