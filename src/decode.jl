@@ -71,9 +71,9 @@ end
 
 
 
-decode(io::IO, ::Val{TYPE_0}) = decode_unsigned(io)
+decode_internal(io::IO, ::Val{TYPE_0}) = decode_unsigned(io)
 
-function decode(io::IO, ::Val{TYPE_1})
+function decode_internal(io::IO, ::Val{TYPE_1})
     data = signed(decode_unsigned(io))
     if (i = Int128(data) + one(data)) > typemax(Int64)
         return -i
@@ -85,12 +85,12 @@ end
 """
 Decode Byte Array
 """
-function decode(io::IO, ::Val{TYPE_2})
+function decode_internal(io::IO, ::Val{TYPE_2})
     if (peekbyte(io) & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
         skip(io, 1)
         result = IOBuffer()
         while peekbyte(io) !== BREAK_INDEF
-            write(result, decode(io))
+            write(result, decode_internal(io))
         end
         return take!(result)
     else
@@ -101,12 +101,12 @@ end
 """
 Decode String
 """
-function decode(io::IO, ::Val{TYPE_3})
+function decode_internal(io::IO, ::Val{TYPE_3})
     if (peekbyte(io) & ADDNTL_INFO_MASK) == ADDNTL_INFO_INDEF
         skip(io, 1)
         result = IOBuffer()
         while peekbyte(io) !== BREAK_INDEF
-            write(result, decode(io))
+            write(result, decode_internal(io))
         end
         return String(take!(result))
     else
@@ -117,25 +117,25 @@ end
 """
 Decode Vector of arbitrary elements
 """
-function decode(io::IO, ::Val{TYPE_4})
-    return map(identity, decode_ntimes(decode, io))
+function decode_internal(io::IO, ::Val{TYPE_4})
+    return map(identity, decode_ntimes(decode_internal, io))
 end
 
 """
 Decode Dict
 """
-function decode(io::IO, ::Val{TYPE_5})
+function decode_internal(io::IO, ::Val{TYPE_5})
     return Dict(decode_ntimes(io) do io
-        decode(io) => decode(io)
+        decode_internal(io) => decode_internal(io)
     end)
 end
 
 """
 Decode Tagged type
 """
-function decode(io::IO, ::Val{TYPE_6})
+function decode_internal(io::IO, ::Val{TYPE_6})
     tag = decode_unsigned(io)
-    data = decode(io)
+    data = decode_internal(io)
     if tag in (POS_BIG_INT_TAG, NEG_BIG_INT_TAG)
         big_int = parse(
             BigInt, bytes2hex(data), base = HEX_BASE
@@ -157,7 +157,7 @@ function decode(io::IO, ::Val{TYPE_6})
     return Tag(tag, data)
 end
 
-function decode(io::IO, ::Val{TYPE_7})
+function decode_internal(io::IO, ::Val{TYPE_7})
     first_byte = read(io, UInt8)
     addntl_info = first_byte & ADDNTL_INFO_MASK
     if addntl_info < SINGLE_BYTE_SIMPLE_PLUS_ONE + 1
@@ -190,16 +190,16 @@ function decode(io::IO, ::Val{TYPE_7})
     end
 end
 
-function decode(io::IO)
+function decode_internal(io::IO)
     # leave startbyte in io
     first_byte = peekbyte(io)
     typ = first_byte & TYPE_BITS_MASK
-    typ == TYPE_0 && return decode(io, Val(TYPE_0))
-    typ == TYPE_1 && return decode(io, Val(TYPE_1))
-    typ == TYPE_2 && return decode(io, Val(TYPE_2))
-    typ == TYPE_3 && return decode(io, Val(TYPE_3))
-    typ == TYPE_4 && return decode(io, Val(TYPE_4))
-    typ == TYPE_5 && return decode(io, Val(TYPE_5))
-    typ == TYPE_6 && return decode(io, Val(TYPE_6))
-    typ == TYPE_7 && return decode(io, Val(TYPE_7))
+    typ == TYPE_0 && return decode_internal(io, Val(TYPE_0))
+    typ == TYPE_1 && return decode_internal(io, Val(TYPE_1))
+    typ == TYPE_2 && return decode_internal(io, Val(TYPE_2))
+    typ == TYPE_3 && return decode_internal(io, Val(TYPE_3))
+    typ == TYPE_4 && return decode_internal(io, Val(TYPE_4))
+    typ == TYPE_5 && return decode_internal(io, Val(TYPE_5))
+    typ == TYPE_6 && return decode_internal(io, Val(TYPE_6))
+    typ == TYPE_7 && return decode_internal(io, Val(TYPE_7))
 end

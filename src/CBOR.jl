@@ -45,7 +45,11 @@ export decode, decode_with_iana
 export Simple, Null, Undefined
 
 function decode(data::Array{UInt8, 1})
-    return decode(IOBuffer(data))
+    return decode_internal(IOBuffer(data))
+end
+
+function decode(data::IO)
+    return decode(read(data))
 end
 
 function encode(data)

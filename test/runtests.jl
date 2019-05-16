@@ -111,9 +111,9 @@ function CBOR.encode(io::IO, x::OrderedDict)
         encode(io, value)
     end
 end
-function CBOR.decode(io::IO, ::Val{CBOR.TYPE_5})
+function CBOR.decode_internal(io::IO, ::Val{CBOR.TYPE_5})
     return OrderedDict(CBOR.decode_ntimes(io) do io
-        decode(io) => decode(io)
+        CBOR.decode_internal(io) => CBOR.decode_internal(io)
     end...)
 end
 
