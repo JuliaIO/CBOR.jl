@@ -200,7 +200,7 @@ type belong to one of the above types.
 For example, say you have a user-defined type `Point`
 
 ```julia
-type Point
+mutable struct Point
     x::Int64
     y::Float64
     space::String
