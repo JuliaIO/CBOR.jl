@@ -38,6 +38,11 @@ const UINT16_MAX_PLUS_ONE = 0x10000
 const UINT32_MAX_PLUS_ONE = 0x100000000
 const UINT64_MAX_PLUS_ONE = 0x10000000000000000
 
+const INT8_MAX_POSITIVE = 0x7f
+const INT16_MAX_POSITIVE = 0x7fff
+const INT32_MAX_POSITIVE = 0x7fffffff
+const INT64_MAX_POSITIVE = 0x7fffffffffffffff
+
 const SIZE_OF_FLOAT64 = sizeof(Float64)
 const SIZE_OF_FLOAT32 = sizeof(Float32)
 const SIZE_OF_FLOAT16 = sizeof(Float16)

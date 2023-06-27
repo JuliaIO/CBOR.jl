@@ -74,11 +74,39 @@ end
 decode_internal(io::IO, ::Val{TYPE_0}) = decode_unsigned(io)
 
 function decode_internal(io::IO, ::Val{TYPE_1})
-    data = signed(decode_unsigned(io))
-    if (i = Int128(data) + one(data)) > typemax(Int64)
-        return -i
+    addntl_info = read(io, UInt8) & ADDNTL_INFO_MASK
+    if addntl_info < SINGLE_BYTE_UINT_PLUS_ONE
+        return -signed(addntl_info + Int8(1))
+    elseif addntl_info == ADDNTL_INFO_UINT8
+        data = bswap(read(io, UInt8))
+        if data > INT8_MAX_POSITIVE
+            return -Int16(data + one(data))
+        else
+            return -signed(data + one(data))
+        end
+    elseif addntl_info == ADDNTL_INFO_UINT16
+        data = bswap(read(io, UInt16))
+        if data > INT16_MAX_POSITIVE
+            return -Int32(data + one(data))
+        else
+            return -signed(data + one(data))
+        end
+    elseif addntl_info == ADDNTL_INFO_UINT32
+        data = bswap(read(io, UInt32))
+        if data > INT32_MAX_POSITIVE
+            return -Int64(data + one(data))
+        else
+            return -signed(data + one(data))
+        end
+    elseif addntl_info == ADDNTL_INFO_UINT64
+        data = bswap(read(io, UInt64))
+        if data > INT64_MAX_POSITIVE
+            return -Int128(data + one(data))
+        else
+            return -signed(data + one(data))
+        end
     else
-        return -(data + one(data))
+        error("Unknown Int type")
     end
 end
 

@@ -79,7 +79,11 @@ function encode(io::IO, num::Unsigned)
 end
 
 function encode(io::IO, num::T) where T <: Signed
-    encode_unsigned_with_type(io, TYPE_1, unsigned(-num - one(T)))
+    if num >= 0
+        encode_smallest_int(io, TYPE_0, unsigned(num))
+    else
+        encode_smallest_int(io, TYPE_1, unsigned(-num - one(T)))
+    end
 end
 
 function encode(io::IO, byte_string::Vector{UInt8})
